@@ -24,10 +24,9 @@ units = [100,50,30,20,10]
 
 
 learning_rates = [0.00001,0.0001,0.001,0.01,0.1,1.0]
-# learning_rates = [0.0001]
+# learning_rates = [0.001]
 minibatchs = [1,5,25,125,625,3125]
 # minibatchs = [25]
-
 def load_data(dataset):
     data_dir, data_file = os.path.split(dataset)
     if data_dir == "" and not os.path.isfile(dataset):

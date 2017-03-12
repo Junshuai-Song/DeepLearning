@@ -65,8 +65,8 @@ def autoEncoder(Xtrain,XCV,Xtest):
     print("AutoEncoder start!")
     # 输入为np.array，返回二维list
     units = [784,400,100,300,784]
-    learning_rate = 0.0001
-    minibatch = 25
+    learning_rate = 0.001
+    minibatch = 1
     
     # initialize paramters
     w1 = tf.Variable(tf.truncated_normal([units[0],units[1]],stddev = 0.1))
@@ -82,15 +82,17 @@ def autoEncoder(Xtrain,XCV,Xtest):
     b4 = tf.Variable(tf.zeros(units[4]))
     
     x = tf.placeholder(tf.float32,[None, units[0]])
-    """  
+    
     hidden1 = tf.nn.relu(tf.matmul(x,w1) + b1)
     hidden2 = tf.nn.relu(tf.matmul(hidden1,w2) + b2)
     hidden3 = tf.nn.relu(tf.matmul(hidden2,w3) + b3)
+    
     """
     hidden1 = tf.nn.sigmoid(tf.matmul(x,w1) + b1)
     hidden2 = tf.nn.sigmoid(tf.matmul(hidden1,w2) + b2)
     hidden3 = tf.nn.sigmoid(tf.matmul(hidden2,w3) + b3)
-          
+    """
+    
 #    y = tf.nn.softmax(tf.matmul(hidden1,w2) + b2)
     y = tf.matmul(hidden3,w4) + b4
     answer = tf.matmul(hidden1,w2) + b2
@@ -98,16 +100,30 @@ def autoEncoder(Xtrain,XCV,Xtest):
     # 真实值
     y_ = tf.placeholder(tf.float32, [None, units[4]])
     # tf.square(y - y_data)
-    loss_total = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=y, labels=y_))
+    # loss_total = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=y, labels=y_))
+    loss_total = tf.reduce_mean(tf.nn.l2_loss(y - y_))
     regularizers = (tf.nn.l2_loss(w1) + tf.nn.l2_loss(b1) + tf.nn.l2_loss(w2) + tf.nn.l2_loss(b2) + tf.nn.l2_loss(w3) + tf.nn.l2_loss(b3) + tf.nn.l2_loss(w4) + tf.nn.l2_loss(b4))
     # 将正则项加入损失函数
-    loss_total += (5e-4 * regularizers)
-    p = 0.05
-    sumq = tf.reduce_sum(hidden2,axis=0)    # 0是按列计算
-    hidden = hidden2 / sumq
-    loss_total += 5e-4 * tf.reduce_sum( hidden * tf.log(hidden / p))
+    
+    loss_total += (1e-4 * regularizers) # 0.0005
+    
+    
+    p1 = [0.05]*units[2]
+    p2 = [0.95]*units[2]
+#    sumq = tf.reduce_sum(hidden2, axis=0)    # 0是按列计算
+    sumq = tf.reduce_sum(hidden2)
+    
+#    hidden = hidden2 / sumq
+    # ======================= minibatch 增大的时候，这里？ ==========================
+    regularizers1 = 5e-5 * tf.nn.softmax_cross_entropy_with_logits(logits=hidden2/sumq, labels=p1)
+    regularizers2 = 5e-5 * tf.nn.softmax_cross_entropy_with_logits(logits=1.0-hidden2/sumq, labels=p2)
+    loss_total += regularizers1
+    loss_total += regularizers2
+    """
+    loss_total += 5e-4 * tf.reduce_sum( -1.0*hidden * tf.log(hidden / p))
     hidden = 1.0 - hidden
-    loss_total += 5e-4 * tf.reduce_sum(hidden * tf.log(hidden / (1.0-p)))
+    loss_total += 5e-4 * tf.reduce_sum( -1.0*hidden * tf.log(hidden / (1.0-p)))
+    """
     
     train_step = tf.train.AdamOptimizer(learning_rate).minimize(loss_total)   # 学习率
 #    train_step = tf.train.AdadeltaOptimizer(learning_rate).minimize(cross_entropy)   # 学习率很重要，之前过拟合了
@@ -119,17 +135,20 @@ def autoEncoder(Xtrain,XCV,Xtest):
     # LEARNING !
     
     print("minibatch = %d" % minibatch)
-        
+    
     sess = tf.Session()
     sess.run(init_op)
     # 500000
-    for i in range((int)(500000 * 1.0/minibatch)):    # 表示一共选择30W次，5W个样本，就是训练6轮
+    for i in range((int)(200000 * 1.0/minibatch)):    # 表示一共选择30W次，5W个样本，就是训练6轮
         start = i % (int(Xtrain.shape[0]/(1.0*minibatch)))
     #    print(start)
         start = start * minibatch
         batch_xs = Xtrain[start:start+minibatch]
         batch_ys = Xtrain[start:start+minibatch]
+#        print(sess.run(sumq, feed_dict={x: batch_xs, y_: batch_ys}))
+#        print(sess.run(hidden2, feed_dict={x: batch_xs, y_: batch_ys}))
         sess.run(train_step, feed_dict={x: batch_xs, y_: batch_ys})
+
         if i%1000==0:
             print("step %d " % i)
     
