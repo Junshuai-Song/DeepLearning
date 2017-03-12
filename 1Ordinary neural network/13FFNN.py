@@ -22,10 +22,10 @@ units = [AutoEncoder.get_mediate(),AutoEncoder.get_mediate()/2,AutoEncoder.get_m
 # units = [784,300,10]
 
 
-# learning_rates = [0.00001,0.0001,0.001,0.01,0.1,1.0]
-learning_rates = [0.0001]
-# minibatchs = [1,5,25,125,625,3125]
-minibatchs = [1,25]
+learning_rates = [0.00001,0.0001,0.001,0.01,0.1,1.0]
+# learning_rates = [0.0001]
+minibatchs = [1,5,25,125,625,3125]
+# minibatchs = [1,25]
 
 def load_data(dataset):
     data_dir, data_file = os.path.split(dataset)
@@ -142,7 +142,6 @@ if __name__ == '__main__':
                 ##############################
                 # LEARNING !
                 
-                # learning_rate = [0.00001,0.0001,0.001,0.01,0.1,1.0]
                 # minibatchs
                 for minibatch in minibatchs:
                     print(learning_rate,activate_function,optimization,minibatch)

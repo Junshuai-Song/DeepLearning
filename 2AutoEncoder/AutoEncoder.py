@@ -64,7 +64,7 @@ def get_mediate():
 def autoEncoder(Xtrain,XCV,Xtest):
     print("AutoEncoder start!")
     # 输入为np.array，返回二维list
-    units = [784,300,100,300,784]
+    units = [784,400,100,300,784]
     learning_rate = 0.0001
     minibatch = 25
     
@@ -82,7 +82,7 @@ def autoEncoder(Xtrain,XCV,Xtest):
     b4 = tf.Variable(tf.zeros(units[4]))
     
     x = tf.placeholder(tf.float32,[None, units[0]])
-    
+    """  
     hidden1 = tf.nn.relu(tf.matmul(x,w1) + b1)
     hidden2 = tf.nn.relu(tf.matmul(hidden1,w2) + b2)
     hidden3 = tf.nn.relu(tf.matmul(hidden2,w3) + b3)
@@ -90,15 +90,26 @@ def autoEncoder(Xtrain,XCV,Xtest):
     hidden1 = tf.nn.sigmoid(tf.matmul(x,w1) + b1)
     hidden2 = tf.nn.sigmoid(tf.matmul(hidden1,w2) + b2)
     hidden3 = tf.nn.sigmoid(tf.matmul(hidden2,w3) + b3)
-    """        
+          
 #    y = tf.nn.softmax(tf.matmul(hidden1,w2) + b2)
     y = tf.matmul(hidden3,w4) + b4
     answer = tf.matmul(hidden1,w2) + b2
     
     # 真实值
     y_ = tf.placeholder(tf.float32, [None, units[4]])
-    cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=y, labels=y_))
-    train_step = tf.train.AdamOptimizer(learning_rate).minimize(cross_entropy)   # 学习率
+    # tf.square(y - y_data)
+    loss_total = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=y, labels=y_))
+    regularizers = (tf.nn.l2_loss(w1) + tf.nn.l2_loss(b1) + tf.nn.l2_loss(w2) + tf.nn.l2_loss(b2) + tf.nn.l2_loss(w3) + tf.nn.l2_loss(b3) + tf.nn.l2_loss(w4) + tf.nn.l2_loss(b4))
+    # 将正则项加入损失函数
+    loss_total += (5e-4 * regularizers)
+    p = 0.05
+    sumq = tf.reduce_sum(hidden2,axis=0)    # 0是按列计算
+    hidden = hidden2 / sumq
+    loss_total += 5e-4 * tf.reduce_sum( hidden * tf.log(hidden / p))
+    hidden = 1.0 - hidden
+    loss_total += 5e-4 * tf.reduce_sum(hidden * tf.log(hidden / (1.0-p)))
+    
+    train_step = tf.train.AdamOptimizer(learning_rate).minimize(loss_total)   # 学习率
 #    train_step = tf.train.AdadeltaOptimizer(learning_rate).minimize(cross_entropy)   # 学习率很重要，之前过拟合了
 
     # 这个测试一下看能不能用
