@@ -18,14 +18,15 @@ activate_functions = 2
 # 优化算法: AdadeltaOptimizer & AdamOptimizer
 optimizations = 2
 # 网络结构：设计层数与各层顶点个数
-units = [AutoEncoder.get_mediate(),AutoEncoder.get_mediate()/2,AutoEncoder.get_mediate()/2,AutoEncoder.get_mediate()/2,10]
+# units = [AutoEncoder.get_mediate(),(int)(AutoEncoder.get_mediate()/2),(int)(AutoEncoder.get_mediate()/4),(int)(AutoEncoder.get_mediate()/8),10]
 # units = [784,300,10]
+units = [100,50,30,20,10]
 
 
 learning_rates = [0.00001,0.0001,0.001,0.01,0.1,1.0]
 # learning_rates = [0.0001]
 minibatchs = [1,5,25,125,625,3125]
-# minibatchs = [1,25]
+# minibatchs = [25]
 
 def load_data(dataset):
     data_dir, data_file = os.path.split(dataset)
