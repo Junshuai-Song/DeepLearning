@@ -23,9 +23,9 @@ optimizations = 2
 units = [100,50,30,20,10]
 
 
-learning_rates = [0.00001,0.0001,0.001,0.01,0.1,1.0]
+learning_rates = [0.001,0.01,0.1]
 # learning_rates = [0.001]
-minibatchs = [1,5,25,125,625,3125]
+minibatchs = [5,50,500]
 # minibatchs = [25]
 def load_data(dataset):
     data_dir, data_file = os.path.split(dataset)
@@ -149,7 +149,8 @@ if __name__ == '__main__':
                     sess = tf.Session()
                     sess.run(init_op)
                     # 500000
-                    for i in range((int)(500000 * 1.0/minibatch)):    # 表示一共选择30W次，5W个样本，就是训练6轮
+                    # for i in range((int)(500000 * 1.0/minibatch)):    # 表示一共选择30W次，5W个样本，就是训练6轮
+                    for i in range((int)(20000)): 
                         start = i % (int(Xtrain.shape[0]/(1.0*minibatch)))
                         start = start * minibatch
                     #    print(start)
@@ -160,7 +161,8 @@ if __name__ == '__main__':
                         if i%1000 == 0:  #验证集测试
                     #        print(sess.run(cross_entropy,feed_dict={x: XCV, y_: yCV}))
                             cv_accuracy = sess.run(accuracy,feed_dict={x:Xtrain, y_: ytrain})
-                            print("step %d, train accuracy %g" % (i, cv_accuracy))
+                            cv_loss = sess.run(cross_entropy,feed_dict={x:Xtrain, y_: ytrain})
+                            print("step %d, train accuracy %g, loss %g " % (i, cv_accuracy, cv_loss))
                             cv_accuracy = sess.run(accuracy,feed_dict={x:XCV, y_: yCV})
                             print("step %d, CV    accuracy %g" % (i, cv_accuracy))
                     

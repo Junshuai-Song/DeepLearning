@@ -65,8 +65,8 @@ def autoEncoder(Xtrain,XCV,Xtest):
     print("AutoEncoder start!")
     # 输入为np.array，返回二维list
     units = [784,400,100,300,784]
-    learning_rate = 0.001
-    minibatch = 1
+    learning_rate = 0.005
+    minibatch = 100
     
     # initialize paramters
     w1 = tf.Variable(tf.truncated_normal([units[0],units[1]],stddev = 0.1))
@@ -101,25 +101,30 @@ def autoEncoder(Xtrain,XCV,Xtest):
     y_ = tf.placeholder(tf.float32, [None, units[4]])
     # tf.square(y - y_data)
     # loss_total = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=y, labels=y_))
-    loss_total = tf.reduce_mean(tf.nn.l2_loss(y - y_))
-    regularizers = (tf.nn.l2_loss(w1) + tf.nn.l2_loss(b1) + tf.nn.l2_loss(w2) + tf.nn.l2_loss(b2) + tf.nn.l2_loss(w3) + tf.nn.l2_loss(b3) + tf.nn.l2_loss(w4) + tf.nn.l2_loss(b4))
+    regularizer = tf.reduce_mean(tf.nn.l2_loss(y - y_)/(1.0*minibatch))
+    loss_total = regularizer
+    regularizer1 = (tf.nn.l2_loss(w1) + tf.nn.l2_loss(b1) + tf.nn.l2_loss(w2) + tf.nn.l2_loss(b2) + tf.nn.l2_loss(w3) + tf.nn.l2_loss(b3) + tf.nn.l2_loss(w4) + tf.nn.l2_loss(b4))
     # 将正则项加入损失函数
     
-    loss_total += (1e-4 * regularizers) # 0.0005
+    loss_total += (1e-1 * regularizer1) # 0.0005
     
     
-    p1 = [0.05]*units[2]
-    p2 = [0.95]*units[2]
+    p1 = tf.constant(0.005)
 #    sumq = tf.reduce_sum(hidden2, axis=0)    # 0是按列计算
-    sumq = tf.reduce_sum(hidden2)
-    
+    sumq = tf.reduce_sum(hidden2)/(units[2]*1.0*minibatch)
+    regularizer2 = (p1*tf.log(p1/(sumq+1e-8)) + (1.0-p1)*tf.log((1.0-p1)/(1.0-sumq+1e-8)))
 #    hidden = hidden2 / sumq
     # ======================= minibatch 增大的时候，这里？ ==========================
-    regularizers1 = 5e-5 * tf.nn.softmax_cross_entropy_with_logits(logits=hidden2/sumq, labels=p1)
-    regularizers2 = 5e-5 * tf.nn.softmax_cross_entropy_with_logits(logits=1.0-hidden2/sumq, labels=p2)
-    loss_total += regularizers1
-    loss_total += regularizers2
+#    r1 = hidden2/sumq
+#    r2 = 1.0 - r1
+#    regularizer2 = tf.nn.softmax_cross_entropy_with_logits(logits=sumq, labels=p1)
+    loss_total += (1e-1 * regularizer2)
     """
+    regularizer2_1 = tf.nn.softmax_cross_entropy_with_logits(logits=hidden2/sumq, labels=p1)
+    regularizer2_2 = tf.nn.softmax_cross_entropy_with_logits(logits=1.0-hidden2/sumq, labels=p2)
+    regularizer2 = tf.add(regularizer2_1, regularizer2_2)
+    loss_total += (1e2 * regularizer2)
+    
     loss_total += 5e-4 * tf.reduce_sum( -1.0*hidden * tf.log(hidden / p))
     hidden = 1.0 - hidden
     loss_total += 5e-4 * tf.reduce_sum( -1.0*hidden * tf.log(hidden / (1.0-p)))
@@ -137,9 +142,13 @@ def autoEncoder(Xtrain,XCV,Xtest):
     print("minibatch = %d" % minibatch)
     
     sess = tf.Session()
+    
+    # summary_writer = tf.summary.FileWriter('log_simple_stats', sess.graph)
+    
     sess.run(init_op)
     # 500000
-    for i in range((int)(200000 * 1.0/minibatch)):    # 表示一共选择30W次，5W个样本，就是训练6轮
+    # for i in range((int)(50000000 * 1.0/minibatch)):    # 表示一共选择30W次，5W个样本，就是训练6轮
+    for i in range((int)(20000)): 
         start = i % (int(Xtrain.shape[0]/(1.0*minibatch)))
     #    print(start)
         start = start * minibatch
@@ -150,7 +159,12 @@ def autoEncoder(Xtrain,XCV,Xtest):
         sess.run(train_step, feed_dict={x: batch_xs, y_: batch_ys})
 
         if i%1000==0:
-            print("step %d " % i)
+            loss = sess.run(loss_total, feed_dict={x: batch_xs, y_: batch_ys})
+            reg0 = sess.run(regularizer, feed_dict={x: batch_xs, y_: batch_ys})
+            reg1 = sess.run(regularizer1, feed_dict={x: batch_xs, y_: batch_ys})
+            reg2 = sess.run(regularizer2, feed_dict={x: batch_xs, y_: batch_ys})
+            print("step %d, loss %g, reg0 %g, reg1 %g, reg2 %g" % (i, loss, reg0, reg1,reg2))
+                            
     
     Xtrain_ = sess.run(answer,feed_dict={x:Xtrain})
     XCV_ = sess.run(answer,feed_dict={x:XCV})
@@ -176,6 +190,7 @@ if __name__ == '__main__':
     # Check the sizes of these numpy arrays
     print(Xtrain.shape, XCV.shape, Xtest.shape)
     Xtrain, XCV, Xtest = autoEncoder(Xtrain,XCV,Xtest)
+    
     Xtrain = np.array(Xtrain)
     XCV    = np.array(XCV)
     Xtest  = np.array(Xtest)
