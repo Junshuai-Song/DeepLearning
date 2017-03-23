@@ -100,7 +100,10 @@ def autoEncoder(Xtrain,XCV,Xtest):
     # 真实值
     y_ = tf.placeholder(tf.float32, [None, units[4]])
     # tf.square(y - y_data)
-    # loss_total = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=y, labels=y_))
+    
+    # 注意，对于多分类问题，Tensorflow中还没有直接的交叉熵解决方案。 ------------
+    # regularizer = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=y, labels=y_))
+    
     regularizer = tf.reduce_mean(tf.nn.l2_loss(y - y_)/(1.0*minibatch))
     loss_total = regularizer
     regularizer1 = (tf.nn.l2_loss(w1) + tf.nn.l2_loss(b1) + tf.nn.l2_loss(w2) + tf.nn.l2_loss(b2) + tf.nn.l2_loss(w3) + tf.nn.l2_loss(b3) + tf.nn.l2_loss(w4) + tf.nn.l2_loss(b4))
@@ -111,7 +114,8 @@ def autoEncoder(Xtrain,XCV,Xtest):
     
     p1 = tf.constant(0.005)
 #    sumq = tf.reduce_sum(hidden2, axis=0)    # 0是按列计算
-    sumq = tf.reduce_sum(hidden2)/(units[2]*1.0*minibatch)
+#    sumq = tf.reduce_sum(hidden2)/(units[2]*1.0*minibatch)
+    sumq = tf.reduce_mean(hidden2)
     regularizer2 = (p1*tf.log(p1/(sumq+1e-8)) + (1.0-p1)*tf.log((1.0-p1)/(1.0-sumq+1e-8)))
 #    hidden = hidden2 / sumq
     # ======================= minibatch 增大的时候，这里？ ==========================
@@ -148,7 +152,7 @@ def autoEncoder(Xtrain,XCV,Xtest):
     sess.run(init_op)
     # 500000
     # for i in range((int)(50000000 * 1.0/minibatch)):    # 表示一共选择30W次，5W个样本，就是训练6轮
-    for i in range((int)(20000)): 
+    for i in range((int)(200000)): 
         start = i % (int(Xtrain.shape[0]/(1.0*minibatch)))
     #    print(start)
         start = start * minibatch

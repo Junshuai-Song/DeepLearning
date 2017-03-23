@@ -131,7 +131,7 @@ for learning_rate in learning_rates:
                 sess.run(init_op)
                 # 500000
                 # for i in range((int)(5000 * 1.0/minibatch)):    # 表示一共选择30W次，5W个样本，就是训练6轮
-                for i in range((int)(20000)):  
+                for i in range((int)(200000)):  
                     start = i % (int(Xtrain.shape[0]/(1.0*minibatch)))
                     start = start * minibatch
                 #    print(start)

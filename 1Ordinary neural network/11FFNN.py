@@ -3,6 +3,7 @@ import pickle as cPickle
 import numpy as np
 import os
 import tensorflow as tf
+import random
 
 """
 Tensorflow
@@ -11,16 +12,16 @@ Tensorflow
 # relu  + AdadeltaOptimizer + 5层
 
 # 激活函数: relu & sigmoid
-activate_functions = 2
+activate_functions = 1
 # 优化算法: AdadeltaOptimizer & AdamOptimizer
-optimizations = 2
+optimizations = 1
 # 网络结构：设计层数与各层顶点个数
 units = [784,300,100,40,10]
 # units = [784,300,10]
 
 
-learning_rates = [0.001,0.01,0.1]
-minibatchs = [5,50,500]
+learning_rates = [0.01]
+minibatchs = [5]
 
 def load_data(dataset):
     data_dir, data_file = os.path.split(dataset)
@@ -121,7 +122,8 @@ if __name__ == '__main__':
                 if optimization==0:
                     train_step = tf.train.AdamOptimizer(learning_rate).minimize(cross_entropy)   # 学习率
                 else:
-                    train_step = tf.train.AdadeltaOptimizer(learning_rate).minimize(cross_entropy)   # 学习率很重要，之前过拟合了
+                    train_step = tf.train.AdadeltaOptimizer(learning_rate).minimize(cross_entropy)   # 学习率
+                
                 # 这个测试一下看能不能用
                 init_op = tf.global_variables_initializer()
                 
@@ -140,17 +142,20 @@ if __name__ == '__main__':
                     print(learning_rate,activate_function,optimization,minibatch)
                     
                     sess = tf.Session()
+                    # summary_op = tf.summary.merge_all()
                     # summary_writer = tf.summary.FileWriter('log_simple_stats', sess.graph)
                     
                     sess.run(init_op)
                     # 500000
                     # for i in range((int)(500000 * 1.0/minibatch)):    # 表示一共选择30W次，5W个样本，就是训练6轮
-                    for i in range((int)(20000)):   
-                        start = i % (int(Xtrain.shape[0]/(1.0*minibatch)))
-                        start = start * minibatch
+                    for i in range((int)(200000)):   
+#                        start = i % (int(Xtrain.shape[0]/(1.0*minibatch)))
+# start = start * minibatch
+                        start = random.randint(0,Xtrain.shape[0]-1-minibatch)
                     #    print(start)
                         batch_xs = Xtrain[start:start+minibatch]
                         batch_ys = ytrain[start:start+minibatch]
+                        
                         sess.run(train_step, feed_dict={x: batch_xs, y_: batch_ys})
                         
                         if i%1000 == 0:  #验证集测试
