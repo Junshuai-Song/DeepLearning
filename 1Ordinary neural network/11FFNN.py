@@ -151,10 +151,13 @@ if __name__ == '__main__':
                     for i in range((int)(200000)):   
 #                        start = i % (int(Xtrain.shape[0]/(1.0*minibatch)))
 # start = start * minibatch
-                        start = random.randint(0,Xtrain.shape[0]-1-minibatch)
+# start = random.randint(0,Xtrain.shape[0]-1-minibatch)
+                        ss = random.sample([k for k in range(Xtrain.shape[0])], minibatch)
+                        batch_xs = [Xtrain[k] for k in ss]
+                        batch_ys = [ytrain[k] for k in ss]
                     #    print(start)
-                        batch_xs = Xtrain[start:start+minibatch]
-                        batch_ys = ytrain[start:start+minibatch]
+#                        batch_xs = Xtrain[start:start+minibatch]
+#                        batch_ys = ytrain[start:start+minibatch]
                         
                         sess.run(train_step, feed_dict={x: batch_xs, y_: batch_ys})
                         
