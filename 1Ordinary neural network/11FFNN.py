@@ -44,9 +44,7 @@ def load_data(dataset):
     f.close()     
     
     return train_set[0], train_set[1], valid_set[0], valid_set[1], test_set[0], test_set[1]
-    # train_set[0]: 50000 * 784, train_set[1]: 50000    后面的表示label
-    # valid_set[0]: 10000 * 784, valid_set[1]: 10000
-    # test_set[0]:  10000 * 784, test_set[1]:  10000
+
     
 def get_batch(label, label_num):
     # the type of label is list.
@@ -124,30 +122,26 @@ if __name__ == '__main__':
                 else:
                     train_step = tf.train.AdadeltaOptimizer(learning_rate).minimize(cross_entropy)   # 学习率
                 
-                # 这个测试一下看能不能用
+                
                 init_op = tf.global_variables_initializer()
                 
                 # tf.local_variables_initializer().run()
                 
-                # 精度查看
+                # 精度
                 correct_prediction = tf.equal(tf.arg_max(y,1), tf.arg_max(y_,1))
                 accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
                 
                 ##############################
                 # LEARNING !
                 
-                # learning_rate = [0.00001,0.0001,0.001,0.01,0.1,1.0]
                 # minibatchs
                 for minibatch in minibatchs:
                     print(learning_rate,activate_function,optimization,minibatch)
                     
                     sess = tf.Session()
-                    # summary_op = tf.summary.merge_all()
-                    # summary_writer = tf.summary.FileWriter('log_simple_stats', sess.graph)
                     
                     sess.run(init_op)
                     # 500000
-                    # for i in range((int)(500000 * 1.0/minibatch)):    # 表示一共选择30W次，5W个样本，就是训练6轮
                     for i in range((int)(200000)):   
 #                        start = i % (int(Xtrain.shape[0]/(1.0*minibatch)))
 # start = start * minibatch
