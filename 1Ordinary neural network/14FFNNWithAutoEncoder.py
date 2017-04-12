@@ -71,8 +71,8 @@ def autoEncoder(Xtrain,XCV,Xtest):
 
     learning_rates = [0.001, 0.01, 0.1]
     minibatchs = [5, 50, 500]
-    learning_rate = 0.005
-    minibatch = 100
+    learning_rate1 = 0.005
+    minibatch1 = 128
 
     for learning_rate in learning_rates:
         for activate_function in range(activate_functions):
@@ -125,7 +125,7 @@ def autoEncoder(Xtrain,XCV,Xtest):
                     # 注意，对于多分类问题，Tensorflow中还没有直接的交叉熵解决方案。 ------------
                     # regularizer = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=y, labels=y_))
 
-                    regularizer = tf.reduce_mean(tf.nn.l2_loss(y - y_)/(1.0*minibatch))
+                    regularizer = tf.reduce_mean(tf.nn.l2_loss(y - y_)/(1.0*minibatch1))
                     loss_total = regularizer
                     regularizer1 = (tf.nn.l2_loss(w1) + tf.nn.l2_loss(b1) + tf.nn.l2_loss(w2) + tf.nn.l2_loss(b2) + tf.nn.l2_loss(w3) + tf.nn.l2_loss(b3) + tf.nn.l2_loss(w4) + tf.nn.l2_loss(b4))
                     # 将正则项加入损失函数
@@ -161,7 +161,7 @@ def autoEncoder(Xtrain,XCV,Xtest):
                         train_step2 = tf.train.AdadeltaOptimizer(learning_rate).minimize(cross_entropy)  # 学习率很重要，之前过拟合了
 
                     # AutoEncoder的
-                    train_step = tf.train.AdamOptimizer(learning_rate).minimize(loss_total)   # 学习率
+                    train_step = tf.train.AdamOptimizer(learning_rate1).minimize(loss_total)   # 学习率
                 #    train_step = tf.train.AdadeltaOptimizer(learning_rate).minimize(cross_entropy)   # 学习率很重要，之前过拟合了
 
                     # 这个测试一下看能不能用
@@ -183,12 +183,12 @@ def autoEncoder(Xtrain,XCV,Xtest):
                     sess.run(init_op)
                     # 500000
                     # for i in range((int)(50000000 * 1.0/minibatch)):    # 表示一共选择30W次，5W个样本，就是训练6轮
-                    for i in range((int)(200000)):
-                        start = i % (int(Xtrain.shape[0]/(1.0*minibatch)))
+                    for i in range((int)(10000)):
+                        start = i % (int(Xtrain.shape[0]/(1.0*minibatch1)))
                     #    print(start)
-                        start = start * minibatch
-                        batch_xs = Xtrain[start:start+minibatch]
-                        batch_ys = Xtrain[start:start+minibatch]
+                        start = start * minibatch1
+                        batch_xs = Xtrain[start:start+minibatch1]
+                        batch_ys = Xtrain[start:start+minibatch1]
                 #        print(sess.run(sumq, feed_dict={x: batch_xs, y_: batch_ys}))
                 #        print(sess.run(hidden2, feed_dict={x: batch_xs, y_: batch_ys}))
                         sess.run(train_step, feed_dict={x: batch_xs, y_: batch_ys})
