@@ -33,6 +33,10 @@ def max_pool_3x3(x):
     return tf.nn.max_pool(x, ksize=[1,3,3,1], strides=[1,3,3,1], padding="SAME")
 
 
+def max_pool_5x5(x):
+    return tf.nn.max_pool(x, ksize=[1,5,5,1], strides=[1,5,5,1], padding="SAME")
+
+
 def CNN_LeNet_5_Mnist(logs_path):
     """
     LeNet对Mnist数据集进行测试
@@ -143,6 +147,7 @@ def read_data_flower(input_path, split_path):
     splits = sio.loadmat(split_path)
     train_location = splits["trn1"][0]
     val_location = splits["val1"][0]
+    # print("length of val_location: ",len(val_location))
     test_location = splits["tst1"][0]
 
     # print(test_location[0])
@@ -153,22 +158,16 @@ def read_data_flower(input_path, split_path):
     trainX,valX,testX = [],[],[]
     trainY, valY, testY = [], [], []
 
-    global max_row, max_col
-    max_row, max_col = -1,-1
-    for i in range(len(files)):
-        lena = mpimg.imread(input_path+files[i][:-1])
-        x,y = lena.shape[0], lena.shape[1]
-        if x > max_row:
-            max_row = x
-        if y > max_col:
-            max_col = y
 
-    box = (0, 0, max_row, max_col)
-    print("box: ", box)
+    maxsize = (28, 28)
     for train in train_location:
-        lena = Image.open(input_path + files[int(train)-1][:-1]).crop(box)
-        # print(im.size)
-        trainX.append(np.reshape(lena, [-1]))
+        lena = Image.open(input_path + files[int(train) - 1][:-1])
+        # print(type(lena))
+        lena.thumbnail(maxsize, Image.ANTIALIAS)
+        lena.save("temp.jpg", "JPEG")
+        lena = Image.open("temp.jpg").crop((0,0,28,28))
+        # return np.array(trainX), np.array(trainY), np.array(valX), np.array(valY), np.array(testX), np.array(testY)
+        trainX.append(np.reshape(lena, [-1])/255.0)
         # region = region.transpose(Image.ROTATE_180)
         # lena = mpimg.imread(input_path + files[int(train)-1][:-1])
         # trainX.append(reshape(lena, max_row, max_col))
@@ -178,54 +177,56 @@ def read_data_flower(input_path, split_path):
         label = int(float(train) / 80.001)
         trainY.append(get_one_hot(label, 17))
     for val in val_location:
-        lena = Image.open(input_path + files[int(train) - 1][:-1]).crop(box)
-        valX.append(np.reshape(lena, [-1]))
+        lena = Image.open(input_path + files[int(val) - 1][:-1])
+        lena.thumbnail(maxsize, Image.ANTIALIAS)
+        lena.save("temp.jpg", "JPEG")
+        lena = Image.open("temp.jpg").crop((0, 0, 28, 28))
+        valX.append(np.reshape(lena, [-1])/255.0)
         # valX.append(np.reshape(lena, [lena.shape[0] * lena.shape[1] * lena.shape[2]]))
         label = int(float(val) / 80.001)
-        trainY.append(get_one_hot(label, 17))
+        valY.append(get_one_hot(label, 17))
     for test in test_location:
-        lena = Image.open(input_path + files[int(train) - 1][:-1]).crop(box)
-        testX.append(np.reshape(lena, [-1]))
+        lena = Image.open(input_path + files[int(test) - 1][:-1])
+        lena.thumbnail(maxsize, Image.ANTIALIAS)
+        lena.save("temp.jpg", "JPEG")
+        lena = Image.open("temp.jpg").crop((0, 0, 28, 28))
+        testX.append(np.reshape(lena, [-1])/255.0)
         # testX.append(np.reshape(lena, [lena.shape[0] * lena.shape[1] * lena.shape[2]]))
         label = int(float(test) / 80.001)
-        trainY.append(get_one_hot(label, 17))
+        testY.append(get_one_hot(label, 17))
 
     # Y改成one-hot编码
     print("read data finish!")
     return np.array(trainX), np.array(trainY), np.array(valX), np.array(valY), np.array(testX), np.array(testY)
 
 
-def CNN_LeNet_5(input_path, split_path, log_path):
+def CNN_LeNet_5(input_path, split_path, log_path, drop):
     # LeNet_5的卷积网络，对花分类的数据集进行测试 (500, 541, 3)
     # read_data_flower(input_path, split_path)
     trainX, trainY, valX, valY, testX, testY = read_data_flower(input_path, split_path)
     print("trainX.shape: ",trainX.shape)
 
     # 构建网络
-    x = tf.placeholder(tf.float32, [None, 3465903])
+    x = tf.placeholder(tf.float32, [None, 784*3])
     y_ = tf.placeholder(tf.float32, [None, 17])
-    x_image = tf.reshape(x, [-1, 1093, 1057, 3])  # 把向量重新整理成矩阵，最后一个表示通道个数
+    x_image = tf.reshape(x, [-1,28,28,3])   # 把向量重新整理成矩阵，最后一个表示通道个数
 
     # 第一二参数值得卷积核尺寸大小，即patch，第三个参数是图像通道数，第四个参数是卷积核的数目，代表会出现多少个卷积特征
-    W_conv1 = weight_variable([10, 10, 3, 32])  # 表示3个通道一起处理，一般方法是加和之后过激活函数
+    W_conv1 = weight_variable([5, 5, 3, 32])
     b_conv1 = bias_variable([32])
     h_conv1 = tf.nn.relu(conv2d(x_image, W_conv1) + b_conv1)
-    h_pool1 = max_pool_2x2(h_conv1) # 547 * 529 * 32
+    h_pool1 = max_pool_2x2(h_conv1)
 
 
-    W_conv2 = weight_variable([10, 10, 32, 64])   # 多通道卷积，卷积出64个特征
+    W_conv2 = weight_variable([5, 5, 32, 64])   # 多通道卷积，卷积出64个特征
     b_conv2 = bias_variable([64])
     h_conv2 = tf.nn.relu(conv2d(h_pool1, W_conv2) + b_conv2)
-    h_pool2 = max_pool_3x3(h_conv2) # 183 * 177 * 64
-    # 参数过多，多加两个max_pool层
-    h_pool3 = max_pool_3x3(h_pool2) # 61 * 59
-    h_pool4 = max_pool_3x3(h_pool3) # 21 * 20
+    h_pool2 = max_pool_2x2(h_conv2)
 
-
-    W_fc1 = weight_variable([21 * 20 * 64, 1024])
+    W_fc1 = weight_variable([7*7*64, 1024])
     b_fc1 = bias_variable([1024])
-    h_pool4_flat = tf.reshape(h_pool4, [-1, 21 * 20 * 64])
-    h_fc1 = tf.nn.relu(tf.matmul(h_pool4_flat, W_fc1) + b_fc1)
+    h_pool2_flat = tf.reshape(h_pool2, [-1, 7*7*64])
+    h_fc1 = tf.nn.relu(tf.matmul(h_pool2_flat, W_fc1) + b_fc1)
 
     keep_prob = tf.placeholder(tf.float32)
     h_fc1_drop = tf.nn.dropout(h_fc1, keep_prob)
@@ -255,8 +256,8 @@ def CNN_LeNet_5(input_path, split_path, log_path):
 
     # for i in range((int)(20000)):
     num_examples = trainX.shape[0]
-    minibatch = 128
-    for epoch in range(20):
+    minibatch = 32
+    for epoch in range(200):
         print("iter:", epoch)
         avg_cost = 0.
         total_batch = int(num_examples / minibatch)
@@ -265,9 +266,14 @@ def CNN_LeNet_5(input_path, split_path, log_path):
             batch_xs, batch_ys = next_batch(trainX, trainY, minibatch, num_examples)
             # print(type(batch_xs),type(batch_ys))
             # print(batch_xs.shape, batch_ys.shape)
+            # print(batch_xs[0])
 
             # and summary nodes
-            _, c, summary = sess.run([train_step, cross_entropy, merged_summary_op],feed_dict={x: batch_xs, y_: batch_ys, keep_prob: 0.8})
+            # print(sess.run(h_pool4, feed_dict={x: batch_xs, y_: batch_ys, keep_prob: 0.8}))
+            # print(sess.run(y_conv, feed_dict={x: batch_xs, y_: batch_ys, keep_prob: 0.8}))
+            # print(sess.run(cross_entropy, feed_dict={x: batch_xs, y_: batch_ys, keep_prob: 0.8}))
+            # return
+            _, c, summary = sess.run([train_step, cross_entropy, merged_summary_op],feed_dict={x: batch_xs, y_: batch_ys, keep_prob: drop})
 
             # Write logs at every iteration
             summary_writer.add_summary(summary, epoch * total_batch + i)
@@ -275,12 +281,16 @@ def CNN_LeNet_5(input_path, split_path, log_path):
             avg_cost += c / total_batch
             if (i % 1 == 0):
                 print("i:", i, "   current c:", c, "   ave_cost:", avg_cost)
-            if i%100==0:
-                print("val accuracy %g" % sess.run(accuracy, feed_dict={
-                    x: valX, y_: valY, keep_prob: 1.0}))
+            if i%1==0:
+                # print("valX.shape:", valX.shape, "  valY.shape: ",valY.shape)
+                print("i: %d    val accuracy %g" % (i, sess.run(accuracy, feed_dict={
+                    x: valX[0:10], y_: valY[0:10], keep_prob: 1.0})))
+                # print("i: %d    test accuracy %g" % (i,sess.run(accuracy, feed_dict={
+                #     x: testX, y_: testY, keep_prob: 1.0})))
         # Display logs per epoch step
         # if (epoch + 1) % display_step == 0:
         print("Epoch:", '%04d' % (epoch + 1), "cost=", "{:.9f}".format(avg_cost))
+        print("====================================================================")
 
         # 到达一定程度进行测试test输出
         if epoch % 1 == 0:
@@ -300,8 +310,13 @@ def next_batch(trainX, trainY, minibatch, num_examples):
 
 
 if __name__ =="__main__":
+    # 测试LeNet_5在minist数据集上效果
     # CNN_LeNet_5_Mnist("./CNN/minist")
-    CNN_LeNet_5("./flower_data/jpg/","./flower_data/datasplits.mat","./CNN/flower")
+
+    # LeNet扩展，应用flower数据集
+    drops = [0.8,1.0,0.6,0.4,0.2]
+    for i in range(len(drops)):
+        CNN_LeNet_5("./flower_data/jpg/","./flower_data/datasplits.mat","./CNN/flower"+str(i), drops[i])
 
 
 
