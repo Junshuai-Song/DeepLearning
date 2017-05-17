@@ -74,8 +74,10 @@ def CNN_LeNet_5_Mnist(logs_path):
     b_fc2 = bias_variable([10])
     y_conv = tf.nn.softmax(tf.matmul(h_fc1_drop, W_fc2) + b_fc2)
 
-    cross_entropy = tf.reduce_mean(-tf.reduce_sum(y_ * tf.log(y_conv), reduction_indices=[1]))
+    # cross_entropy = tf.reduce_mean(-tf.reduce_sum(y_ * tf.log(y_conv), reduction_indices=[1]))
+    cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=y_conv, labels=y_))
     train_step = tf.train.AdamOptimizer(1e-4).minimize(cross_entropy)
+    # train_step = tf.train.GradientDescentOptimizer(1e-2).minimize(cross_entropy)
 
     tf.summary.scalar("cross_entropy", cross_entropy)
 
@@ -94,7 +96,7 @@ def CNN_LeNet_5_Mnist(logs_path):
     summary_writer = tf.summary.FileWriter(logs_path, graph=tf.get_default_graph())
 
     # for i in range((int)(20000)):
-    num_examples = 12800*2    #这里暂时手动设置吧
+    num_examples = 128*10    #这里暂时手动设置吧
     minibatch = 128
     for epoch in range(20):
         print("iter:", epoch)
@@ -114,7 +116,7 @@ def CNN_LeNet_5_Mnist(logs_path):
             summary_writer.add_summary(summary, epoch * total_batch + i)
             # Compute average loss
             avg_cost += c / total_batch
-            if (i % 10 == 0):
+            if (i % 1 == 0):
                 print("i:", i, "   current c:", c, "   ave_cost:", avg_cost)
         # Display logs per epoch step
         # if (epoch + 1) % display_step == 0:
@@ -160,12 +162,15 @@ def read_data_flower(input_path, split_path):
 
 
     maxsize = (28, 28)
+    box = (0,0,28,28)
+    # maxsize = (56, 56)
+    # box = (0, 0, 56, 56)
     for train in train_location:
         lena = Image.open(input_path + files[int(train) - 1][:-1])
         # print(type(lena))
         lena.thumbnail(maxsize, Image.ANTIALIAS)
         lena.save("temp.jpg", "JPEG")
-        lena = Image.open("temp.jpg").crop((0,0,28,28))
+        lena = Image.open("temp.jpg").crop(box)
         # return np.array(trainX), np.array(trainY), np.array(valX), np.array(valY), np.array(testX), np.array(testY)
         trainX.append(np.reshape(lena, [-1])/255.0)
         # region = region.transpose(Image.ROTATE_180)
@@ -180,7 +185,7 @@ def read_data_flower(input_path, split_path):
         lena = Image.open(input_path + files[int(val) - 1][:-1])
         lena.thumbnail(maxsize, Image.ANTIALIAS)
         lena.save("temp.jpg", "JPEG")
-        lena = Image.open("temp.jpg").crop((0, 0, 28, 28))
+        lena = Image.open("temp.jpg").crop(box)
         valX.append(np.reshape(lena, [-1])/255.0)
         # valX.append(np.reshape(lena, [lena.shape[0] * lena.shape[1] * lena.shape[2]]))
         label = int(float(val) / 80.001)
@@ -189,7 +194,7 @@ def read_data_flower(input_path, split_path):
         lena = Image.open(input_path + files[int(test) - 1][:-1])
         lena.thumbnail(maxsize, Image.ANTIALIAS)
         lena.save("temp.jpg", "JPEG")
-        lena = Image.open("temp.jpg").crop((0, 0, 28, 28))
+        lena = Image.open("temp.jpg").crop(box)
         testX.append(np.reshape(lena, [-1])/255.0)
         # testX.append(np.reshape(lena, [lena.shape[0] * lena.shape[1] * lena.shape[2]]))
         label = int(float(test) / 80.001)
@@ -200,11 +205,131 @@ def read_data_flower(input_path, split_path):
     return np.array(trainX), np.array(trainY), np.array(valX), np.array(valY), np.array(testX), np.array(testY)
 
 
-def CNN_LeNet_5(input_path, split_path, log_path, drop):
+def CNN_LeNet_5_56(input_path, split_path, logs_path):
     # LeNet_5的卷积网络，对花分类的数据集进行测试 (500, 541, 3)
     # read_data_flower(input_path, split_path)
     trainX, trainY, valX, valY, testX, testY = read_data_flower(input_path, split_path)
-    print("trainX.shape: ",trainX.shape)
+    print("trainX.shape: ",trainX.shape, trainY.shape, valX.shape, valY.shape, testX.shape, testY.shape)
+
+    # 构建网络
+    x = tf.placeholder(tf.float32, [None, 784*3*4])
+    y_ = tf.placeholder(tf.float32, [None, 17])
+    x_image = tf.reshape(x, [-1,56,56,3])   # 把向量重新整理成矩阵，最后一个表示通道个数
+
+    # 第一二参数值得卷积核尺寸大小，即patch，第三个参数是图像通道数，第四个参数是卷积核的数目，代表会出现多少个卷积特征
+    W_conv1 = weight_variable([5, 5, 3, 32])
+    b_conv1 = bias_variable([32])
+    h_conv1 = tf.nn.relu(conv2d(x_image, W_conv1) + b_conv1)
+    h_pool1 = max_pool_2x2(h_conv1)
+
+
+    W_conv2 = weight_variable([5, 5, 32, 64])   # 多通道卷积，卷积出64个特征
+    b_conv2 = bias_variable([64])
+    h_conv2 = tf.nn.relu(conv2d(h_pool1, W_conv2) + b_conv2)
+    h_pool2 = max_pool_2x2(h_conv2)
+
+    W_fc1 = weight_variable([14*14*64, 1024])
+    b_fc1 = bias_variable([1024])
+    h_pool2_flat = tf.reshape(h_pool2, [-1, 14*14*64])
+    h_fc1 = tf.nn.relu(tf.matmul(h_pool2_flat, W_fc1) + b_fc1)
+
+    keep_prob = tf.placeholder(tf.float32)
+    h_fc1_drop = tf.nn.dropout(h_fc1, keep_prob)
+
+    W_fc2 = weight_variable([1024, 17])
+    b_fc2 = bias_variable([17])
+    y_conv = tf.nn.softmax(tf.matmul(h_fc1_drop, W_fc2) + b_fc2)
+
+    # cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=y_conv, labels=y_))
+    cross_entropy = tf.reduce_mean(-tf.reduce_sum(y_ * tf.log(y_conv+1e-10), reduction_indices=[1]))
+
+
+    train_step = tf.train.AdamOptimizer(1e-4).minimize(cross_entropy)
+    # train_step = tf.train.GradientDescentOptimizer(1e-2).minimize(cross_entropy)
+
+    # tf.summary.scalar("cross_entropy", cross_entropy)
+
+    correct_prediction = tf.equal(tf.arg_max(y_conv, 1), tf.arg_max(y_, 1))
+    accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
+
+    # merged_summary_op = tf.summary.merge_all()
+    # 初始化变量
+    init_op = tf.global_variables_initializer()
+
+    # summary_writer = tf.summary.FileWriter(log_path, graph=tf.get_default_graph())
+
+    # 开始训练
+    drops = [1.0, 0.8, 0.6, 0.4, 0.2]
+    for i in range(len(drops)):
+        drop = drops[i]
+        log_path = logs_path + str(i)
+        print("log_path: ", log_path, "  drop:", drop)
+
+        sess = tf.Session()
+        sess.run(init_op)
+        # iterate
+        # Xtrain, ytrain = get_batch(self.args, self.simrank, self.walks, minibatch * 100, self.tem_simrank)  # 找一个大点的数据集测试效果
+
+        # for i in range((int)(20000)):
+        num_examples = trainX.shape[0]
+        minibatch = 16
+        maxc = -1.0
+        for epoch in range(1000):
+        # for epoch in range(1):
+            print("iter:", epoch)
+            avg_cost = 0.0
+            total_batch = int(num_examples / minibatch)
+            # Loop over all batches
+            for i in range(total_batch):
+                batch_xs, batch_ys = next_batch(trainX, trainY, minibatch, num_examples)
+                # print(type(batch_xs),type(batch_ys))
+                # print(batch_xs.shape, batch_ys.shape)
+                # print(batch_xs[0])
+
+                # and summary nodes
+                # print(sess.run(h_pool4, feed_dict={x: batch_xs, y_: batch_ys, keep_prob: 0.8}))
+                # print(sess.run(y_conv, feed_dict={x: batch_xs, y_: batch_ys, keep_prob: 0.8}))
+                # print(sess.run(cross_entropy, feed_dict={x: batch_xs, y_: batch_ys, keep_prob: 0.8}))
+                # return
+                # print("batch_xs.shape: ", batch_xs.shape)
+                # _, c, summary = sess.run([train_step, cross_entropy, merged_summary_op],feed_dict={x: batch_xs, y_: batch_ys, keep_prob: drop})
+                _, c = sess.run([train_step, cross_entropy], feed_dict={x: batch_xs, y_: batch_ys, keep_prob: drop})
+
+
+                # Write logs at every iteration
+                # summary_writer.add_summary(summary, epoch * total_batch + i)
+                # Compute average loss
+                avg_cost += c / total_batch
+                if (i % 1 == 0):
+                    print("i:", i, "   current c:", c, "   ave_cost:", avg_cost)
+                # if i%1==0:
+                #     # print("valX.shape:", valX.shape, "  valY.shape: ",valY.shape)
+                #     print("i: %d    val accuracy %g" % (i, sess.run(accuracy, feed_dict={
+                #         x: valX[0:10], y_: valY[0:10], keep_prob: 1.0})))
+                    # print("i: %d    test accuracy %g" % (i,sess.run(accuracy, feed_dict={
+                    #     x: testX, y_: testY, keep_prob: 1.0})))
+            # Display logs per epoch step
+            # if (epoch + 1) % display_step == 0:
+            print("Epoch:", '%04d' % (epoch + 1), "cost=", "{:.9f}".format(avg_cost))
+
+            # 到达一定程度进行测试test输出
+            if epoch % 1 == 0:
+                # batchs = mnist.train.next_batch(minibatch)
+                acc = sess.run(accuracy, feed_dict={ x: testX, y_: testY, keep_prob: 1.0})
+                if acc > maxc:
+                    maxc = acc
+                print("test accuracy %g" % acc)
+                # x: batchs[0], y_: batchs[1], keep_prob: 1.0}))
+            print("====================================================================")
+        sess.close()
+        print("maxc: ", maxc)
+        print("finish!\n")
+
+
+def CNN_LeNet_5_28(input_path, split_path, logs_path):
+    # read_data_flower(input_path, split_path)
+    trainX, trainY, valX, valY, testX, testY = read_data_flower(input_path, split_path)
+    print("trainX.shape: ",trainX.shape, trainY.shape, valX.shape, valY.shape, testX.shape, testY.shape)
 
     # 构建网络
     x = tf.placeholder(tf.float32, [None, 784*3])
@@ -235,10 +360,14 @@ def CNN_LeNet_5(input_path, split_path, log_path, drop):
     b_fc2 = bias_variable([17])
     y_conv = tf.nn.softmax(tf.matmul(h_fc1_drop, W_fc2) + b_fc2)
 
-    cross_entropy = tf.reduce_mean(-tf.reduce_sum(y_ * tf.log(y_conv), reduction_indices=[1]))
-    train_step = tf.train.AdamOptimizer(1e-4).minimize(cross_entropy)
+    # cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=y_conv, labels=y_))
+    cross_entropy = tf.reduce_mean(-tf.reduce_sum(y_ * tf.log(y_conv+1e-10), reduction_indices=[1]))
 
-    tf.summary.scalar("cross_entropy", cross_entropy)
+
+    train_step = tf.train.AdamOptimizer(1e-4).minimize(cross_entropy)
+    # train_step = tf.train.GradientDescentOptimizer(1e-2).minimize(cross_entropy)
+
+    # tf.summary.scalar("cross_entropy", cross_entropy)
 
     correct_prediction = tf.equal(tf.arg_max(y_conv, 1), tf.arg_max(y_, 1))
     accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
@@ -247,59 +376,75 @@ def CNN_LeNet_5(input_path, split_path, log_path, drop):
     # 初始化变量
     init_op = tf.global_variables_initializer()
 
+    # summary_writer = tf.summary.FileWriter(log_path, graph=tf.get_default_graph())
+
     # 开始训练
-    sess = tf.Session()
-    sess.run(init_op)
-    # iterate
-    # Xtrain, ytrain = get_batch(self.args, self.simrank, self.walks, minibatch * 100, self.tem_simrank)  # 找一个大点的数据集测试效果
-    summary_writer = tf.summary.FileWriter(log_path, graph=tf.get_default_graph())
+    drops = [1.0, 0.8, 0.6, 0.4, 0.2]
+    for i in range(len(drops)):
+        drop = drops[i]
+        log_path = logs_path + str(i)
+        print("log_path: ", log_path, "  drop:", drop)
 
-    # for i in range((int)(20000)):
-    num_examples = trainX.shape[0]
-    minibatch = 32
-    for epoch in range(200):
-        print("iter:", epoch)
-        avg_cost = 0.
-        total_batch = int(num_examples / minibatch)
-        # Loop over all batches
-        for i in range(total_batch):
-            batch_xs, batch_ys = next_batch(trainX, trainY, minibatch, num_examples)
-            # print(type(batch_xs),type(batch_ys))
-            # print(batch_xs.shape, batch_ys.shape)
-            # print(batch_xs[0])
+        sess = tf.Session()
+        sess.run(init_op)
+        # iterate
+        # Xtrain, ytrain = get_batch(self.args, self.simrank, self.walks, minibatch * 100, self.tem_simrank)  # 找一个大点的数据集测试效果
 
-            # and summary nodes
-            # print(sess.run(h_pool4, feed_dict={x: batch_xs, y_: batch_ys, keep_prob: 0.8}))
-            # print(sess.run(y_conv, feed_dict={x: batch_xs, y_: batch_ys, keep_prob: 0.8}))
-            # print(sess.run(cross_entropy, feed_dict={x: batch_xs, y_: batch_ys, keep_prob: 0.8}))
-            # return
-            _, c, summary = sess.run([train_step, cross_entropy, merged_summary_op],feed_dict={x: batch_xs, y_: batch_ys, keep_prob: drop})
+        # for i in range((int)(20000)):
+        num_examples = trainX.shape[0]
+        minibatch = 16
+        maxc = -1.0
+        for epoch in range(1000):
+        # for epoch in range(1):
+            print("iter:", epoch)
+            avg_cost = 0.0
+            total_batch = int(num_examples / minibatch)
+            # Loop over all batches
+            for i in range(total_batch):
+                batch_xs, batch_ys = next_batch(trainX, trainY, minibatch, num_examples)
+                # print(type(batch_xs),type(batch_ys))
+                # print(batch_xs.shape, batch_ys.shape)
+                # print(batch_xs[0])
 
-            # Write logs at every iteration
-            summary_writer.add_summary(summary, epoch * total_batch + i)
-            # Compute average loss
-            avg_cost += c / total_batch
-            if (i % 1 == 0):
-                print("i:", i, "   current c:", c, "   ave_cost:", avg_cost)
-            if i%1==0:
-                # print("valX.shape:", valX.shape, "  valY.shape: ",valY.shape)
-                print("i: %d    val accuracy %g" % (i, sess.run(accuracy, feed_dict={
-                    x: valX[0:10], y_: valY[0:10], keep_prob: 1.0})))
-                # print("i: %d    test accuracy %g" % (i,sess.run(accuracy, feed_dict={
-                #     x: testX, y_: testY, keep_prob: 1.0})))
-        # Display logs per epoch step
-        # if (epoch + 1) % display_step == 0:
-        print("Epoch:", '%04d' % (epoch + 1), "cost=", "{:.9f}".format(avg_cost))
-        print("====================================================================")
+                # and summary nodes
+                # print(sess.run(h_pool4, feed_dict={x: batch_xs, y_: batch_ys, keep_prob: 0.8}))
+                # print(sess.run(y_conv, feed_dict={x: batch_xs, y_: batch_ys, keep_prob: 0.8}))
+                # print(sess.run(cross_entropy, feed_dict={x: batch_xs, y_: batch_ys, keep_prob: 0.8}))
+                # return
+                # print("batch_xs.shape: ", batch_xs.shape)
+                # _, c, summary = sess.run([train_step, cross_entropy, merged_summary_op],feed_dict={x: batch_xs, y_: batch_ys, keep_prob: drop})
+                _, c = sess.run([train_step, cross_entropy], feed_dict={x: batch_xs, y_: batch_ys, keep_prob: drop})
 
-        # 到达一定程度进行测试test输出
-        if epoch % 1 == 0:
-            # batchs = mnist.train.next_batch(minibatch)
-            print("test accuracy %g" % sess.run(accuracy, feed_dict={
-                x: testX, y_: testY, keep_prob: 1.0}))
-            # x: batchs[0], y_: batchs[1], keep_prob: 1.0}))
 
-    print("finish!")
+                # Write logs at every iteration
+                # summary_writer.add_summary(summary, epoch * total_batch + i)
+                # Compute average loss
+                avg_cost += c / total_batch
+                if (i % 1 == 0):
+                    print("i:", i, "   current c:", c, "   ave_cost:", avg_cost)
+                # if i%1==0:
+                #     # print("valX.shape:", valX.shape, "  valY.shape: ",valY.shape)
+                #     print("i: %d    val accuracy %g" % (i, sess.run(accuracy, feed_dict={
+                #         x: valX[0:10], y_: valY[0:10], keep_prob: 1.0})))
+                    # print("i: %d    test accuracy %g" % (i,sess.run(accuracy, feed_dict={
+                    #     x: testX, y_: testY, keep_prob: 1.0})))
+            # Display logs per epoch step
+            # if (epoch + 1) % display_step == 0:
+            print("Epoch:", '%04d' % (epoch + 1), "cost=", "{:.9f}".format(avg_cost))
+
+            # 到达一定程度进行测试test输出
+            if epoch % 1 == 0:
+                # batchs = mnist.train.next_batch(minibatch)
+                acc = sess.run(accuracy, feed_dict={ x: testX, y_: testY, keep_prob: 1.0})
+                if acc > maxc:
+                    maxc = acc
+                print("test accuracy %g" % acc)
+                # x: batchs[0], y_: batchs[1], keep_prob: 1.0}))
+            print("====================================================================")
+        sess.close()
+        print("maxc: ", maxc)
+        print("finish!\n")
+    print("finish all!")
 
 def next_batch(trainX, trainY, minibatch, num_examples):
     locations = random.sample([i for i in range(num_examples)], minibatch)
@@ -314,9 +459,13 @@ if __name__ =="__main__":
     # CNN_LeNet_5_Mnist("./CNN/minist")
 
     # LeNet扩展，应用flower数据集
-    drops = [0.8,1.0,0.6,0.4,0.2]
-    for i in range(len(drops)):
-        CNN_LeNet_5("./flower_data/jpg/","./flower_data/datasplits.mat","./CNN/flower"+str(i), drops[i])
+    # drops = [0.8,1.0,0.6,0.4,0.2]
+    # drops = [1.0, 0.8, 0.6, 0.4, 0.2]
+    # drops = [0.8, 0.6, 0.4, 0.2]
+    # for i in range(len(drops)):
+    #     print("drops: ", drops[i])
+    # CNN_LeNet_5_56("./flower_data/jpg/","./flower_data/datasplits.mat","./CNN/flower")
+    CNN_LeNet_5_28("./flower_data/jpg/", "./flower_data/datasplits.mat", "./CNN/flower")
 
 
 

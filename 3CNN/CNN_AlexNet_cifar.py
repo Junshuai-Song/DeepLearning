@@ -1,5 +1,12 @@
 # Auther: Alan
 """
+    实现AlexNet网络结构：但是实际上AlexNet网络结构的餐率领有60M，其实际的参数量比后来的几个网络结构都要多，这里不选择
+    但是尝试实现更深层的卷积网络来查看性能
+        这里一共整理了4层
+"""
+
+# Auther: Alan
+"""
 将LeNet5应用在Cifar数据集上
 """
 import tensorflow as tf
@@ -184,8 +191,7 @@ def read_data_cifar(train_file, test_file):
     return train_x/255.0, train_y, test_x/255.0, test_y
 
 
-
-def CNN_LeNet_5(train_file, test_file, log_path):
+def CNN_LeNet_5_dev(train_file, test_file, log_path):
     trainX, trainY, testX, testY = read_data_cifar(train_file, test_file)
     print("trainX.shape: ", trainX.shape, trainY.shape, testX.shape, testY.shape)
 
@@ -195,33 +201,49 @@ def CNN_LeNet_5(train_file, test_file, log_path):
     x_image = tf.reshape(x, [-1,32,32,3])   # 把向量重新整理成矩阵，最后一个表示通道个数
 
     # 第一二参数值得卷积核尺寸大小，即patch，第三个参数是图像通道数，第四个参数是卷积核的数目，代表会出现多少个卷积特征
-    W_conv1 = weight_variable([5, 5, 3, 32])
-    b_conv1 = bias_variable([32])
+    W_conv1 = weight_variable([3, 3, 3, 64])
+    b_conv1 = bias_variable([64])
     h_conv1 = tf.nn.relu(conv2d(x_image, W_conv1) + b_conv1)
-    h_pool1 = max_pool_2x2(h_conv1)
+    h_pool1 = max_pool_2x2(h_conv1)     # 16*16
 
 
-    W_conv2 = weight_variable([5, 5, 32, 64])   # 多通道卷积，卷积出64个特征
+    W_conv2 = weight_variable([3, 3, 64, 64])   # 多通道卷积，卷积出64个特征
     b_conv2 = bias_variable([64])
     h_conv2 = tf.nn.relu(conv2d(h_pool1, W_conv2) + b_conv2)
-    h_pool2 = max_pool_2x2(h_conv2)
+    h_pool2 = max_pool_2x2(h_conv2)     # 8*8
 
-    W_fc1 = weight_variable([8*8*64, 1024])
-    b_fc1 = bias_variable([1024])
-    h_pool2_flat = tf.reshape(h_pool2, [-1, 8*8*64])
+    W_conv3 = weight_variable([3, 3, 64, 128])  # 多通道卷积，卷积出64个特征
+    b_conv3 = bias_variable([128])
+    h_conv3 = tf.nn.relu(conv2d(h_pool2, W_conv3) + b_conv3)
+    h_pool3 = max_pool_2x2(h_conv3)     # 4*4
+
+    W_conv4 = weight_variable([3, 3, 128, 128])  # 多通道卷积，卷积出64个特征
+    b_conv4 = bias_variable([128])
+    h_conv4 = tf.nn.relu(conv2d(h_pool3, W_conv4) + b_conv4)
+    h_pool4 = max_pool_2x2(h_conv4)     # 2*2
+
+
+    W_fc1 = weight_variable([2*2*128, 2*128])
+    b_fc1 = bias_variable([2*128])
+    h_pool2_flat = tf.reshape(h_pool4, [-1, 2*2*128])
     h_fc1 = tf.nn.relu(tf.matmul(h_pool2_flat, W_fc1) + b_fc1)
 
     keep_prob = tf.placeholder(tf.float32)
     h_fc1_drop = tf.nn.dropout(h_fc1, keep_prob)
 
-    W_fc2 = weight_variable([1024, 100])
+    W_fc2 = weight_variable([2*128, 100])
     b_fc2 = bias_variable([100])
     y_conv = tf.nn.softmax(tf.matmul(h_fc1_drop, W_fc2) + b_fc2)
 
-    # cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=y_conv, labels=y_))
-    cross_entropy = tf.reduce_mean(-tf.reduce_sum(y_ * tf.log(y_conv+1e-10), reduction_indices=[1]))
+    # cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=y_conv, labels=y_))   #2/3/4/5
+    cross_entropy = tf.reduce_mean(-tf.reduce_sum(y_ * tf.log(y_conv+1e-10), reduction_indices=[1]))  #1
 
-    train_step = tf.train.AdamOptimizer(1e-4).minimize(cross_entropy)
+
+    # train_step = tf.train.AdamOptimizer(1e-3).minimize(cross_entropy)
+    train_step = tf.train.GradientDescentOptimizer(1e-3).minimize(cross_entropy)    #1/2
+    train_step = tf.train.GradientDescentOptimizer(1e-5).minimize(cross_entropy)    # 3/4
+    train_step = tf.train.GradientDescentOptimizer(1e-1).minimize(cross_entropy)  # 5
+    train_step_3 = tf.train.GradientDescentOptimizer(1e-3).minimize(cross_entropy)
 
     # tf.summary.scalar("cross_entropy", cross_entropy)
 
@@ -235,6 +257,7 @@ def CNN_LeNet_5(train_file, test_file, log_path):
 
     # 开始训练
     drops = [1.0, 0.8, 0.6, 0.4, 0.2]
+    drops = [0.4]
     for i in range(len(drops)):
         drop = drops[i]
         log_path = log_path + str(i)
@@ -250,8 +273,11 @@ def CNN_LeNet_5(train_file, test_file, log_path):
         num_examples = trainX.shape[0]
         minibatch = 128
         maxc = -1.0
-        for epoch in range(100):
+        for epoch in range(1000):
             print("iter:", epoch)
+            if epoch > 800:
+                train_step = train_step_3
+
             avg_cost = 0.
             total_batch = int(num_examples / minibatch)
             # Loop over all batches
@@ -274,13 +300,14 @@ def CNN_LeNet_5(train_file, test_file, log_path):
                 # summary_writer.add_summary(summary, epoch * total_batch + i)
                 # Compute average loss
                 avg_cost += c / total_batch
-                if (i % 50 == 0):
+                if (i % 1 == 0):
                     print("i:", i, "   current c:", c, "   ave_cost:", avg_cost)
 
-                if i % 500 == 0:
-                    # batchs = mnist.train.next_batch(minibatch)
-                    print("test accuracy %g" % sess.run(accuracy, feed_dict={
-                        x: testX, y_: testY, keep_prob: 1.0}))
+                # if i % 500 == 0:
+                #     # batchs = mnist.train.next_batch(minibatch)
+                #     print("test accuracy %g" % sess.run(accuracy, feed_dict={
+                #         x: testX, y_: testY, keep_prob: 1.0}))
+
             # Display logs per epoch step
             print("Epoch:", '%04d' % (epoch + 1), "cost=", "{:.9f}".format(avg_cost))
 
@@ -290,15 +317,13 @@ def CNN_LeNet_5(train_file, test_file, log_path):
                 acc = sess.run(accuracy, feed_dict={x: testX, y_: testY, keep_prob: 1.0})
                 if acc > maxc:
                     maxc = acc
-                print("test accuracy %g" % sess.run(accuracy, feed_dict={
-                    x: testX, y_: testY, keep_prob: 1.0}))
+                print("test accuracy %g" % acc)
                 # x: batchs[0], y_: batchs[1], keep_prob: 1.0}))
             print("====================================================================")
         sess.close()
         print("max acc: ", maxc)
         print("finish!")
     print("finish all!")
-
 
 
 def next_batch(trainX, trainY, minibatch, num_examples):
@@ -310,12 +335,9 @@ def next_batch(trainX, trainY, minibatch, num_examples):
 
 
 if __name__ =="__main__":
-    # 测试LeNet_5在minist数据集上效果
-    # CNN_LeNet_5_Mnist("./CNN/minist")
-
-    # LeNet应用Cifar数据集
-    CNN_LeNet_5("./cifar_data/train.mat","./cifar_data/test.mat","./CNN/cifar")
-
     # 尝试对LeNet网络加深结构，到5层卷积，尝试效果，这里使用默认的dropout比例0.4
+    CNN_LeNet_5_dev("./cifar_data/train.mat", "./cifar_data/test.mat", "./CNN/cifar")
+
+
 
 
