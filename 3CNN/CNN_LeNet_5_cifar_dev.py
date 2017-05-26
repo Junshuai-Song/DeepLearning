@@ -188,7 +188,24 @@ def read_data_cifar(train_file, test_file):
     test_y = np.array(test_y)
 
     print(train_x.shape, train_y.shape, test_x.shape, test_y.shape)
-    return train_x/255.0, train_y, test_x/255.0, test_y
+
+    train_X = []
+    test_X = []
+    for i in range(train_x.shape[0]):
+        batch = train_x[i]
+        if i%500==0:
+            print("get image i:", i)
+        # lena = Image.fromarray(np.reshape(np.reshape(batch, [3, 1024]).T, [32, 32, 3]))
+        # lena.save("temp_cifar.png")
+        train_X.append(np.reshape((np.reshape(np.reshape(batch, [3, 1024]).T, [32, 32, 3])), [-1]))
+    for i in range(test_x.shape[0]):
+        batch = test_x[i]
+        if i % 500 == 0:
+            print("get image i:", i)
+        # lena = Image.fromarray(np.reshape(np.reshape(batch, [3, 1024]).T, [32, 32, 3]))
+        test_X.append(np.reshape((np.reshape(np.reshape(batch, [3, 1024]).T, [32, 32, 3])), [-1]))
+
+    return np.array(train_X) / 255.0, train_y, np.array(test_X) / 255.0, test_y
 
 
 def CNN_LeNet_5_dev(train_file, test_file, log_path):
@@ -238,11 +255,25 @@ def CNN_LeNet_5_dev(train_file, test_file, log_path):
     # cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=y_conv, labels=y_))   #2/3/4/5
     cross_entropy = tf.reduce_mean(-tf.reduce_sum(y_ * tf.log(y_conv+1e-10), reduction_indices=[1]))  #1
 
+    # learning_rate = 0.1
+    # global_step = 1000
+    # decay_steps = 0.95
+    # learning_rate = tf.train.exponential_decay(learning_rate, global_step, decay_steps, decay_rate, staircase=True)
+    # tf.summary.scalar('learning_rate', learning_rate)
+    # # Optimizer.
+    # grads = optimizer.compute_gradients(loss)
+    # op_gradients = optimizer.apply_gradients(grads, global_step=global_step)
 
+    global_step = 500
+    learning_rate = 1e-1
     # train_step = tf.train.AdamOptimizer(1e-3).minimize(cross_entropy)
     train_step = tf.train.GradientDescentOptimizer(1e-3).minimize(cross_entropy)    #1/2
     train_step = tf.train.GradientDescentOptimizer(1e-5).minimize(cross_entropy)    # 3/4
-    train_step = tf.train.GradientDescentOptimizer(1e-1).minimize(cross_entropy)  # 5
+    train_step = tf.train.GradientDescentOptimizer(learning_rate).minimize(cross_entropy)  # 5
+    # train_step = tf.train.AdamOptimizer(1e-3).minimize(cross_entropy)
+
+    momentum = 0.9
+    # train_step = tf.train.MomentumOptimizer(learning_rate, momentum).minimize(cross_entropy)
     train_step_3 = tf.train.GradientDescentOptimizer(1e-3).minimize(cross_entropy)
 
     # tf.summary.scalar("cross_entropy", cross_entropy)
@@ -257,6 +288,7 @@ def CNN_LeNet_5_dev(train_file, test_file, log_path):
 
     # 开始训练
     drops = [1.0, 0.8, 0.6, 0.4, 0.2]
+    drops = [0.5]
     drops = [0.4]
     for i in range(len(drops)):
         drop = drops[i]
@@ -273,10 +305,10 @@ def CNN_LeNet_5_dev(train_file, test_file, log_path):
         num_examples = trainX.shape[0]
         minibatch = 128
         maxc = -1.0
-        for epoch in range(1000):
+        for epoch in range(global_step):
             print("iter:", epoch)
-            if epoch > 800:
-                train_step = train_step_3
+            # if epoch > 400:
+            #     train_step = train_step_3
 
             avg_cost = 0.
             total_batch = int(num_examples / minibatch)
@@ -331,6 +363,16 @@ def next_batch(trainX, trainY, minibatch, num_examples):
     batch_xs = trainX[locations]
     batch_ys = trainY[locations]
     return batch_xs, batch_ys
+
+    # locations = random.sample([i for i in range(num_examples)], minibatch)
+    # batch_xs_ = trainX[locations]
+    # batch_ys = trainY[locations]
+    #
+    # batch_xs = []
+    # for batch in batch_xs_:
+    #     # lena = Image.fromarray(np.reshape(np.reshape(batch, [3, 1024]).T, [32, 32, 3]))
+    #     batch_xs.append(np.reshape((np.reshape(np.reshape(batch, [3, 1024]).T, [32, 32, 3])),[-1]))
+    # return np.array(batch_xs), batch_ys
 
 
 
