@@ -105,6 +105,7 @@ class Car:
         # print(train_model[0:100])
         id_images = [[] for i in range(40000)]
         id_models = [[] for i in range(40000)]
+        id_segs = [[] for i in range(40000)]
 
         ids = [0]*40000
         for i in range(trainY.shape[0]):
@@ -113,17 +114,7 @@ class Car:
             id_images[local].append(trainX[i])
             id_models[local].append(int(train_model[i]))
 
-        # change to np.array
-        for i in range(len(id_images)):
-            id_images[i] = np.array(id_images[i])
-            id_models[i] = np.array(id_models[i])
-        return np.array(ids), np.array(id_images), np.array(id_models)
-
-
-    def get_true(self, batch_xs_, batch_ys_):
-        batch_xs, batch_ys = [], []
-        for i in range(batch_xs_.shape[0]):
-            batch = batch_xs_[i]
+            batch = trainX[i]
             lena = Image.open(self.train_file + "images/" + batch + ".jpg")
             width = lena.size[0]
             height = lena.size[1]
@@ -131,7 +122,35 @@ class Car:
             second = height - 400
             first = random.sample([j for j in range(max(first, 1))], 1)[0]
             second = random.sample([j for j in range(max(second, 1))], 1)[0]
-            # print("first, second:", first, second)
+            id_segs[local].append((first, second))
+
+        # change to np.array
+        for i in range(len(id_images)):
+            id_images[i] = np.array(id_images[i])
+            id_models[i] = np.array(id_models[i])
+            id_segs[i] = np.array(id_segs[i])
+        return np.array(ids), np.array(id_images), np.array(id_models), np.array(id_segs)
+
+
+    def get_true(self, batch_xs_, batch_ys_, batch_segs_):
+        batch_xs, batch_ys = [], []
+        for i in range(batch_xs_.shape[0]):
+            batch = batch_xs_[i]
+            lena = Image.open(self.train_file + "images/" + batch + ".jpg")
+            # print("types: ",type(batch_xs_), type(batch_segs_))
+            # print("batch_segs_[i]: ", batch_segs_[i])
+            seg = batch_segs_[i]
+            # print(type(seg), seg)
+            first = seg[0]
+            second = seg[1]
+            # (first, second) = batch_segs_[i]
+            # print("segs: ", seg[0],seg[1])
+            # width = lena.size[0]
+            # height = lena.size[1]
+            # first = width - 400
+            # second = height - 400
+            # first = random.sample([j for j in range(max(first, 1))], 1)[0]
+            # second = random.sample([j for j in range(max(second, 1))], 1)[0]
             lena = lena.crop((first, second, first + 400, second + 400))
             # lena.save("temp.jpg")
             # lena = Image.open("temp.jpg")
@@ -158,30 +177,46 @@ class Car:
 
         return np.array(batch_xs)
 
-    def next_batch(self, trainY, ids, id_images, id_models, minibatch, num_examples):
-        locations_set = trainY[random.sample([i for i in range(num_examples)], 100)]
-        locations_set = set(locations_set)
-        locations = random.sample(list(locations_set), 2)
-        first = int(locations[0])
-        second = int(locations[1])
-        # print("first, second:", first, second)
-        # print("first:", first, ids[first])
-        locations = random.sample([i for i in range(ids[first])] * minibatch, minibatch)
-        batch_xs_ = id_images[first][locations]
-        batch_ys_ = id_models[first][locations]
+    def next_batch(self, trainY, ids, id_images, id_models, id_segs, minibatch, num_examples):
 
+        l = []
+        for i in range(len(ids)):
+            if ids[i]!=0:
+                l.append(i)
+        # locations = trainY[random.sample(l, 2)]     # to avoid imbalance problem.
+        locations = trainY[random.sample(l, 2*minibatch)]
+        first,second = [], []
+        for i in range(minibatch):
+            first.append(int(locations[i]))
+            second.append(int(locations[i+minibatch]))
 
-        locations = random.sample([i for i in range(ids[first])] * minibatch, minibatch)    # re-sample
-        batch_po_xs_ = id_images[first][locations]
-        batch_po_ys_ = id_models[first][locations]
+        batch_xs_, batch_ys_, batch_segs_ = [], [], []
+        batch_po_xs_, batch_po_ys_, batch_po_segs_ = [], [], []
+        batch_ne_xs_, batch_ne_ys_, batch_ne_segs_ = [], [], []
+        for i in range(minibatch):
+            locations = random.sample([j for j in range(ids[first[i]])] * 2, 2)     # list
 
-        locations = random.sample([i for i in range(ids[second])] * minibatch, minibatch)  # re-sample
-        batch_ne_xs_ = id_images[second][locations]
-        batch_ne_ys_ = id_models[second][locations]
-        # print()
+            # print("locations: ", locations)
+            batch_xs_.append(id_images[first[i]][locations[0]])
+            batch_ys_.append(id_models[first[i]][locations[0]])
+            batch_segs_.append(id_segs[first[i]][locations[0]])
+
+            # print("po locations: ", locations)
+            batch_po_xs_.append(id_images[first[i]][locations[1]])
+            batch_po_ys_.append(id_models[first[i]][locations[1]])
+            batch_po_segs_.append(id_segs[first[i]][locations[1]])
+
+            locations = random.sample([j for j in range(ids[second[i]])]*2, 2)  # re-sample
+            batch_ne_xs_.append(id_images[second[i]][locations[0]])
+            batch_ne_ys_.append(id_models[second[i]][locations[0]])
+            batch_ne_segs_.append(id_segs[second[i]][locations[0]])
+        # print(minibatch, "batch_segs_: ", batch_segs_)
+        batch_xs_, batch_ys_, batch_segs_ = np.array(batch_xs_), np.array(batch_ys_), np.array(batch_segs_)
+        batch_po_xs_, batch_po_ys_, batch_po_segs_ = np.array(batch_po_xs_), np.array(batch_po_ys_), np.array(batch_po_segs_)
+        batch_ne_xs_, batch_ne_ys_, batch_ne_segs_ = np.array(batch_ne_xs_), np.array(batch_ne_ys_), np.array(batch_ne_segs_)
 
         # get true batch from images.
-        batch_xs, batch_ys = self.get_true(batch_xs_, batch_ys_)
+        batch_xs, batch_ys = self.get_true(batch_xs_, batch_ys_, batch_segs_ )
         # print("len:", len(batch_xs_), len(batch_xs_[0]))
         # print("len:", len(batch_xs), len(batch_xs[0]), batch_xs.shape)
         # for id in id_models:
@@ -190,12 +225,85 @@ class Car:
         #         for j in id:
         #             print(j)
         # print(batch_ys_[0:3], batch_ys[0:3])
-        batch_po_xs, batch_po_ys = self.get_true(batch_po_xs_, batch_po_ys_)
-        batch_ne_xs, batch_ne_ys = self.get_true(batch_ne_xs_, batch_ne_ys_)
+        batch_po_xs, batch_po_ys = self.get_true(batch_po_xs_, batch_po_ys_, batch_po_segs_)
+        batch_ne_xs, batch_ne_ys = self.get_true(batch_ne_xs_, batch_ne_ys_, batch_ne_segs_)
+
+        return batch_xs, batch_ys, batch_po_xs, batch_po_ys, batch_ne_xs, batch_ne_ys
+
+    def next_batch_old(self, trainY, ids, id_images, id_models, id_segs, minibatch, num_examples):
+        l = []
+        for i in range(len(ids)):
+            if ids[i]!=0:
+                l.append(i)
+        locations = trainY[random.sample(l, 2)]     # to avoid imbalance problem.
+        # locations_set = set(locations_set)
+        # locations = random.sample(list(locations_set), 2)
+        first = int(locations[0])
+        second = int(locations[1])
+        # print("first, second:", first, second)
+        # print("first:", first, ids[first])
+        locations = random.sample([i for i in range(ids[first])] * minibatch, minibatch)
+        # print("locations: ", locations)
+        batch_xs_ = id_images[first][locations]
+        batch_ys_ = id_models[first][locations]
+        batch_segs_ = id_segs[first][locations]
+
+        locations = random.sample([i for i in range(ids[first])] * minibatch, minibatch)    # re-sample
+        # print("po locations: ", locations)
+        batch_po_xs_ = id_images[first][locations]
+        batch_po_ys_ = id_models[first][locations]
+        batch_po_segs_ = id_segs[first][locations]
+
+        locations = random.sample([i for i in range(ids[second])] * minibatch, minibatch)  # re-sample
+        # print("ne locations: ", locations)
+        batch_ne_xs_ = id_images[second][locations]
+        batch_ne_ys_ = id_models[second][locations]
+        batch_ne_segs_ = id_segs[second][locations]
+        # print()
+
+        # get true batch from images.
+        batch_xs, batch_ys = self.get_true(batch_xs_, batch_ys_, batch_segs_ )
+        # print("len:", len(batch_xs_), len(batch_xs_[0]))
+        # print("len:", len(batch_xs), len(batch_xs[0]), batch_xs.shape)
+        # for id in id_models:
+        #     if(id.shape[0]>0):
+        #         print("id.shape: ", id.shape)
+        #         for j in id:
+        #             print(j)
+        # print(batch_ys_[0:3], batch_ys[0:3])
+        batch_po_xs, batch_po_ys = self.get_true(batch_po_xs_, batch_po_ys_, batch_po_segs_)
+        batch_ne_xs, batch_ne_ys = self.get_true(batch_ne_xs_, batch_ne_ys_, batch_ne_segs_)
 
         return batch_xs, batch_ys, batch_po_xs, batch_po_ys, batch_ne_xs, batch_ne_ys
 
     def my_image_filter(self, x_image):
+        self.h_conv1 = tf.nn.relu(self.conv2d(x_image, self.W_conv1) + self.b_conv1)
+        self.h_pool1 = self.max_pool_2x2(self.h_conv1)  # 200*200*
+        self.h_conv2 = tf.nn.relu(self.conv2d(self.h_pool1, self.W_conv2) + self.b_conv2)
+        self.h_pool2 = self.max_pool_5x5(self.h_conv2)  # 40*40*
+        self.h_conv3 = tf.nn.relu(self.conv2d(self.h_pool2, self.W_conv3) + self.b_conv3)
+        self.h_pool3 = self.max_pool_5x5(self.h_conv3)  # 8*8*
+
+        # attribute
+        self.h_conv4_attr = tf.nn.relu(self.conv2d(self.h_pool3, self.W_conv4_attr) + self.b_conv4_attr)
+        self.h_pool5_attr = self.max_pool_2x2(self.h_conv4_attr)  # 4*4
+        self.h_flat1_attr = tf.reshape(self.h_pool5_attr, [-1, 4 * 4 * 16])
+
+        self.h_flat1_attr_drop = tf.nn.dropout(self.h_flat1_attr, self.keep_prob)
+        self.h_fc1_attr = tf.matmul(self.h_flat1_attr_drop, self.W_fc1_attr) + self.b_fc1_attr
+
+        # coupled
+        self.h_conv4_coup = tf.nn.relu(self.conv2d(self.h_pool3, self.W_conv4_coup) + self.b_conv4_coup)
+        self.h_pool5_coup = self.max_pool_2x2(self.h_conv4_coup)  # 4*4
+        self.h_flat1_coup = tf.reshape(self.h_pool5_coup, [-1, 4 * 4 * 16])
+
+        self.h_flat1_coup_drop = tf.nn.dropout(self.h_flat1_coup, self.keep_prob)       # 0.5
+        self.h_fc1_coup = tf.matmul(self.h_flat1_coup_drop, self.W_fc1_coup) + self.b_fc1_coup
+
+        return self.h_fc1_attr, self.h_fc1_coup
+
+    def my_image_filter_(self, x_image):
+        # old
         self.h_conv1 = tf.nn.relu(self.conv2d(x_image, self.W_conv1) + self.b_conv1)
         self.h_pool1 = self.max_pool_2x2(self.h_conv1)  # 200*200*32
         # print(self.h_pool1, self.W_conv2)
@@ -234,8 +342,8 @@ class Car:
 
         trainX, trainY, train_model, valX, valY, val_model, testX, testX_all = self.read_data_car(train_file, test_file)
         print("trainX.shape: ", trainX.shape, valX.shape, testX.shape)
-        ids, id_images, id_models = self.deal_data_car(trainX, trainY, train_model)
-        ids_val, id_images_val, id_models_val = self.deal_data_car(valX, valY, val_model)
+        ids, id_images, id_models, id_segs = self.deal_data_car(trainX, trainY, train_model)
+        ids_val, id_images_val, id_models_val, id_segs_val = self.deal_data_car(valX, valY, val_model)
         # return
 
         self.keep_prob = tf.placeholder(tf.float32)
@@ -246,33 +354,29 @@ class Car:
         self.positives_image = tf.reshape(self.positives, [-1, 400, 400, 3])
         self.negatives_image = tf.reshape(self.negatives, [-1, 400, 400, 3])
 
-        # variables_dict = {
-        #     "W_conv1": tf.Variable(tf.random_normal([3, 3, 3, 32]),name="W_conv1"),
-        #     "b_conv1": tf.Variable(tf.zeros([32]), name="b_conv1"),
-        #     "W_conv2": tf.Variable(tf.random_normal([3, 3, 32, 64]),name="W_conv2"),
-        #     "b_conv2": tf.Variable(tf.zeros([64]), name="b_conv2"),
-        #     "W_conv3": tf.Variable(tf.random_normal([5,5,64,64]),name="W_conv3"),
-        #     "b_conv3": tf.Variable(tf.zeros([64]), name="b_conv3"),
-        #
-        #     "W_conv4_attr": tf.Variable(tf.random_normal([3,3,64,64]),name="W_conv4_attr"),
-        #     "b_conv4_attr": tf.Variable(tf.zeros([64]), name="b_conv4_attr"),
-        #     "W_conv5_attr": tf.Variable(tf.random_normal([3,3,64,32]),name="W_conv5_attr"),
-        #     "b_conv5_attr": tf.Variable(tf.zeros([32]), name="b_conv5_attr"),
-        #     "W_fc1_attr": tf.Variable(tf.random_normal([4*4*32, 250]),name="W_fc1_attr"), # 512 * 250
-        #     "b_fc1_attr": tf.Variable(tf.zeros([250]), name="b_fc1_attr"),
-        #
-        #     "W_conv4_coup": tf.Variable(tf.random_normal([3,3,64,64]),name="W_conv4_coup"),
-        #     "b_conv4_coup": tf.Variable(tf.zeros([64]), name="b_conv4_coup"),
-        #     "W_conv5_coup": tf.Variable(tf.random_normal([3,3,64,32]),name="W_conv5_coup"),
-        #     "b_conv5_coup": tf.Variable(tf.zeros([32]), name="b_conv5_coup"),
-        #     "W_fc1_coup": tf.Variable(tf.random_normal([4*4*32, 250]),name="W_fc1_coup"),  # 512 * 250
-        #     "b_fc1_coup": tf.Variable(tf.zeros([250]), name="b_fc1_coup"),
-        #
-        #     "W_fc2": tf.Variable(tf.random_normal([250 * 2, 128]),name="W_fc2"),
-        #     "b_fc2": tf.Variable(tf.zeros([128]), name="b_fc2")
-        #
-        # }
+        self.W_conv1 = self.weight_variable([3, 3, 3, 16])
+        self.b_conv1 = self.bias_variable([16])
+        self.W_conv2 = self.weight_variable([3, 3, 16, 16])
+        self.b_conv2 = self.bias_variable([16])
+        self.W_conv3 = self.weight_variable([5, 5, 16, 32])
+        self.b_conv3 = self.bias_variable([32])
 
+        # attr
+        self.W_conv4_attr = self.weight_variable([3, 3, 32, 16])
+        self.b_conv4_attr = self.bias_variable([16])
+        self.W_fc1_attr = self.weight_variable([4 * 4 * 16, 250])  # 256 * 250
+        self.b_fc1_attr = self.bias_variable([250])
+
+        # coupled
+        self.W_conv4_coup = self.weight_variable([3, 3, 32, 16])
+        self.b_conv4_coup = self.bias_variable([16])
+        self.W_fc1_coup = self.weight_variable([4 * 4 * 16, 250])  # 256 * 250
+        self.b_fc1_coup = self.bias_variable([250])
+
+        self.W_fc2 = self.weight_variable([250 * 2, 32])
+        self.b_fc2 = self.bias_variable([32])
+
+        """
         self.W_conv1= self.weight_variable([3, 3, 3, 32])
         self.b_conv1= self.bias_variable([32])
         self.W_conv2= self.weight_variable([3, 3, 32, 64])
@@ -296,6 +400,7 @@ class Car:
 
         self.W_fc2= self.weight_variable([250 * 2, 128])
         self.b_fc2= self.bias_variable([128])
+        """
 
 
         self.anchors_label = tf.placeholder(tf.float32, [None, 250])     # shape [None, 250]
@@ -311,30 +416,40 @@ class Car:
         self.negatives_attr = tf.nn.softmax(self.negatives_attr_)
         # attr loss
         # cross_entropy = tf.reduce_mean(-tf.reduce_sum(y_ * tf.log(y_conv + 1e-10), reduction_indices=[1]))
-        self.cross_entropy = tf.reduce_mean(-tf.reduce_sum(self.anchors_label * tf.log(self.anchors_attr + 1e-10), reduction_indices=[1]))
-                        # + \
-                        # tf.reduce_mean(-tf.reduce_sum(positives_label * tf.log(positives_attr + 1e-10), reduction_indices=[1])) + \
-                        # tf.reduce_mean(-tf.reduce_sum(negatives_label * tf.log(negatives_attr + 1e-10), reduction_indices=[1]))
+        self.cross_entropy = tf.reduce_mean(-tf.reduce_sum(self.anchors_label * tf.log(self.anchors_attr + 1e-10), reduction_indices=[1])) + \
+                        tf.reduce_mean(-tf.reduce_sum(self.positives_label * tf.log(self.positives_attr + 1e-10), reduction_indices=[1])) + \
+                        tf.reduce_mean(-tf.reduce_sum(self.negatives_label * tf.log(self.negatives_attr + 1e-10), reduction_indices=[1]))
         # self.cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=self.anchors_attr, labels=self.anchors_label))
+        self.accuracy = (tf.reduce_mean(tf.cast(tf.equal(tf.arg_max(self.anchors_attr, 1), tf.arg_max(self.anchors_label, 1)),
+                                          tf.float32)) + tf.reduce_mean(
+            tf.cast(tf.equal(tf.arg_max(self.positives_attr, 1), tf.arg_max(self.positives_label, 1)),
+                    tf.float32)) + tf.reduce_mean(
+            tf.cast(tf.equal(tf.arg_max(self.negatives_attr, 1), tf.arg_max(self.negatives_label, 1)), tf.float32)))/3.0
+
+
+        tf.summary.scalar("cross_entropy", 0.5*self.cross_entropy)
 
         self.loss = 0.5 * self.cross_entropy
 
-        self.margin = 0.2
+        # """ # new
+        self.margin = 0.000001
         # triple loss
         self.anchors_coup = tf.nn.relu(self.anchors_coup_)
         self.positives_coup = tf.nn.relu(self.positives_coup_)
         self.negatives_coup = tf.nn.relu(self.negatives_coup_)
 
+
         self.t_pos = tf.reduce_sum(tf.square(self.anchors_coup - self.positives_coup), 1)
         self.t_neg = tf.reduce_sum(tf.square(self.anchors_coup - self.negatives_coup), 1)
 
         self.triple_loss = tf.reduce_mean(tf.maximum(0.0, self.margin + self.t_pos - self.t_neg))
+        tf.summary.scalar("triple_loss", 0.5 * self.triple_loss)
         self.loss += 0.5 * self.triple_loss
 
         # merge
-        self.h_fc1 = tf.concat(1, [self.anchors_attr, self.anchors_coup])
-        self.h_fc2 = tf.concat(1, [self.positives_attr, self.positives_coup])
-        self.h_fc3 = tf.concat(1, [self.negatives_attr, self.negatives_coup])
+        self.h_fc1 = tf.concat(1, [tf.nn.relu(self.anchors_attr_), self.anchors_coup])
+        self.h_fc2 = tf.concat(1, [tf.nn.relu(self.positives_attr_), self.positives_coup])
+        self.h_fc3 = tf.concat(1, [tf.nn.relu(self.negatives_attr_), self.negatives_coup])
 
 
         self.y_conv1 = tf.nn.relu(self.last_layer(self.h_fc1))
@@ -345,27 +460,29 @@ class Car:
         self.d_neg = tf.reduce_sum(tf.square(self.y_conv1 - self.y_conv3), 1)
 
         self.all_loss = tf.reduce_mean(tf.maximum(0.0, self.margin + self.d_pos - self.d_neg))
+        tf.summary.scalar("all_loss", self.all_loss)
         self.loss += self.all_loss
+        tf.summary.scalar("loss", self.loss)
+        # """
 
 
-
-
-        # train_step = tf.train.AdamOptimizer(1e-3).minimize(loss)
 
         self.learning_rate = tf.placeholder(tf.float32, shape=[])
+        tf.summary.scalar("learning_rate", self.learning_rate)
         # self.train_step = tf.train.MomentumOptimizer(learning_rate=self.learning_rate, momentum = 0.9).minimize(self.cross_entropy)
-        # train_step = tf.train.GradientDescentOptimizer(10.0).minimize(cross_entropy)
+        # self.train_step = tf.train.GradientDescentOptimizer(self.learning_rate).minimize(self.loss)
         self.train_step = tf.train.AdamOptimizer(self.learning_rate).minimize(self.loss)
 
         # correct_prediction = tf.equal(tf.arg_max(y_conv, 1), tf.arg_max(y_attribute, 1))
         # accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
 
-        # merged_summary_op = tf.summary.merge_all()
         init_op = tf.initialize_all_variables()
-        # summary_writer = tf.summary.FileWriter(log_path, graph=tf.get_default_graph())
+        self.merged_summary_op = tf.merge_all_summaries()
 
-        drops = [0.5]
-        global_step = 5
+
+        drops = [1.0]
+        global_step = 101
+        # global_step = 3
         for i in range(len(drops)):
             drop = drops[i]
             log_path = log_path + str(i)
@@ -373,18 +490,21 @@ class Car:
 
 
             sess = tf.Session()
+            summary_writer = tf.train.SummaryWriter(log_path, sess.graph)
             sess.run(init_op)
 
             num_examples = trainX.shape[0]
-            minibatch = 5
+            minibatch = 20
             maxc = -1.0
             for epoch in range(global_step):
                 print("iter:", epoch)
 
                 avg_cost = 0.
-                total_batch = int(num_examples / minibatch)
+                avg_attr_acc = 0.
+                total_batch = int(num_examples / minibatch/3 / 2.0)
+                # total_batch = 3
 
-                rate = 0.01 * math.pow(0.7, int(epoch))
+                rate = 0.02 * math.pow(0.7, int(epoch/12.0))
                 print("learning rate: ", rate)
 
                 # Loop over all batches
@@ -398,6 +518,7 @@ class Car:
                                                                                                              ids,
                                                                                                              id_images,
                                                                                                              id_models,
+                                                                                                             id_segs,
                                                                                                              minibatch,
                                                                                                              num_examples)
 
@@ -414,12 +535,14 @@ class Car:
                     # _, c = sess.run([train_step, loss], feed_dict={x: batch_xs, y_attribute: batch_ys, step: float(int(epoch/8000.0))})
 
                     # pos,neg, _, cr, tr, all = sess.run([self.t_pos, self.t_neg, self.train_step, self.cross_entropy, self.triple_loss, self.all_loss], feed_dict={self.anchors: batch_xs, self.anchors_label: batch_ys,self.positives: batch_po_xs,self.positives_label: batch_po_ys,self.negatives: batch_ne_xs,self.negatives_label: batch_ne_ys,self.learning_rate: rate, self.keep_prob: drop})
-                    _, c = sess.run(
-                        [self.train_step, self.loss],
+                    _, c, summary, attr_acc = sess.run(
+                        [self.train_step, self.loss, self.merged_summary_op, self.accuracy],
                         feed_dict={self.anchors: batch_xs, self.anchors_label: batch_ys, self.positives: batch_po_xs,
                                    self.positives_label: batch_po_ys, self.negatives: batch_ne_xs,
                                    self.negatives_label: batch_ne_ys, self.learning_rate: rate, self.keep_prob: drop})
 
+
+                    summary_writer.add_summary(summary, epoch * total_batch + i)
                     # print("pos", pos)
                     # print("neg", neg)
                     # Write logs at every iteration
@@ -427,11 +550,12 @@ class Car:
                     # Compute average loss
                     # c = cr + tr + all
                     avg_cost += c / total_batch
-                    if i%10==0:
-                        print("i:", i, "   current c:", c, "   ave_cost:", avg_cost)
+                    avg_attr_acc += attr_acc / total_batch
+                    if i%1==0:
+                        print("train attribute accuracy:", attr_acc, "  avg_acc:", avg_attr_acc)
+                        print("i/tot: ", i, "/", total_batch, "   current c:", c, "   avg_cost:", avg_cost)
 
-                # Display logs per epoch step
-                print("Epoch:", '%04d' % (epoch + 1), "cost=", "{:.9f}".format(avg_cost))
+
 
                 # validate
                 if epoch%1==0 and epoch>0:
@@ -450,7 +574,9 @@ class Car:
                         for j in range(id_images[i].shape[0]):
                             batch_xs_ = np.array([id_images[i][j]])
                             batch_ys_ = np.array([0 for k in range(250)])
-                            batch_xs, batch_ys = self.get_true(batch_xs_, batch_ys_)
+                            batch_segs_ = np.array([id_segs[i][j]])
+
+                            batch_xs, batch_ys = self.get_true(batch_xs_, batch_ys_,batch_segs_)
 
                             embedding = sess.run([self.y_conv1], feed_dict={self.anchors: batch_xs, self.keep_prob: 1.0})
                             embedding_trainx.append(embedding[0])
@@ -462,13 +588,15 @@ class Car:
                         for j in range(id_images_val[i].shape[0]):
                             batch_xs_ = np.array([id_images_val[i][j]])
                             batch_ys_ = np.array([0 for k in range(250)])
-                            batch_xs, batch_ys = self.get_true(batch_xs_, batch_ys_)
+                            batch_segs_ = np.array([id_segs_val[i][j]])
+                            batch_xs, batch_ys = self.get_true(batch_xs_, batch_ys_, batch_segs_)
 
                             embedding = sess.run([self.y_conv1], feed_dict={self.anchors: batch_xs, self.keep_prob: 1.0})
                             embedding_testx.append(embedding[0])
                             embedding_testy.append(i)
                             # print("test insert...")
                     pre = self.precision(embedding_trainx, embedding_trainy, embedding_testx, embedding_testy)
+                    print("precision: ", pre)
                     if pre > maxc:
                         maxc = pre
 
@@ -493,7 +621,7 @@ class Car:
 
 
             # for e in range(5):  # run 5 times
-            for e in range(1):  # run 5 times
+            for e in range(5):  # run 5 times
                 print("test run times: ", e)
                 for i in range(testX.shape[0]):
                 # for i in range(21):
@@ -503,6 +631,7 @@ class Car:
                     embedding_testx.append(embedding[0])
 
             self.process_answer(testX_all, embedding_trainx, embedding_testx)
+
             """
             sess.close()
             print("finish!")
@@ -520,21 +649,24 @@ class Car:
 
     def precision(self, trainX, trainY, testX, testY):
         # calculate the precision on the val test.
-        topk = 5    # test the top 5.
+        topk = 20    # test the top 5.
         tot = 0.0
         for i in range(len(testX)):
-            if i%100==0:
+            if i%1000==0:
                 print("test number: ", i)
             test = testX[i]
             ans = []
             sim = []
             for j in range(len(trainX)):
                 train = trainX[j]
-                sim.append(np.sum(np.array(test)*np.array(train)))
+                a = np.array(test)
+                b = np.array(train)
+                sim.append(np.sum((a-b)*(a-b)))
+                # sim.append(np.sum(np.array(test)*np.array(train)))
             for j in range(topk):
                 minc = min(sim)
                 flag = sim.index(minc)
-                ans.append(flag)
+                ans.append(trainY[flag])
                 sim[flag] = 1e8
 
             cnt = 0
@@ -543,7 +675,7 @@ class Car:
                     cnt+=1
             tot += cnt
         pre = tot/len(testX)/topk
-        print("top 5, precision: ", pre)
+        print("top 5, precision: ", pre, "  cnt:",tot)
         return pre
 
     def process_answer(self, testX_all, trainX, testX):
@@ -558,7 +690,10 @@ class Car:
             sim = []
             for j in range(len(trainX)):
                 train = trainX[j]
-                sim.append(np.sum(np.array(test) * np.array(train)))
+                a = np.array(test)
+                b = np.array(train)
+                # sim.append(np.sum(np.array(test) * np.array(train)))
+                sim.append(np.sum((a-b)*(a-b)))
             for j in range(topk):
                 minc = min(sim)
                 flag = sim.index(minc)
@@ -602,7 +737,7 @@ if __name__ =="__main__":
     # CNN_LeNet_5_dev("./cifar_data/train.mat", "./cifar_data/test.mat", "./CNN/cifar")
     car = Car()
     # car.test_next_batch("./data/train/", "./data/val/", "./CNN/cifar")
-    car.model("./data/train/", "./data/val/", "./CNN/cifar")
+    car.model("./data/train/", "./data/val/", "./log/car")
 
 
 
