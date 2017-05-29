@@ -181,8 +181,11 @@ class Car:
 
         l = []
         for i in range(len(ids)):
+            if i > self.lowid:
+                break
             if ids[i]!=0:
                 l.append(i)
+
         # locations = trainY[random.sample(l, 2)]     # to avoid imbalance problem.
         locations = trainY[random.sample(l, 2*minibatch)]
         first,second = [], []
@@ -339,6 +342,7 @@ class Car:
         return self.y_conv
 
     def model(self, train_file, test_file, log_path):
+        self.lowid = 300   # the minimal id of cars
 
         trainX, trainY, train_model, valX, valY, val_model, testX, testX_all = self.read_data_car(train_file, test_file)
         print("trainX.shape: ", trainX.shape, valX.shape, testX.shape)
@@ -420,6 +424,7 @@ class Car:
                         tf.reduce_mean(-tf.reduce_sum(self.positives_label * tf.log(self.positives_attr + 1e-10), reduction_indices=[1])) + \
                         tf.reduce_mean(-tf.reduce_sum(self.negatives_label * tf.log(self.negatives_attr + 1e-10), reduction_indices=[1]))
         # self.cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=self.anchors_attr, labels=self.anchors_label))
+
         self.accuracy = (tf.reduce_mean(tf.cast(tf.equal(tf.arg_max(self.anchors_attr, 1), tf.arg_max(self.anchors_label, 1)),
                                           tf.float32)) + tf.reduce_mean(
             tf.cast(tf.equal(tf.arg_max(self.positives_attr, 1), tf.arg_max(self.positives_label, 1)),
@@ -432,12 +437,11 @@ class Car:
         self.loss = 0.5 * self.cross_entropy
 
         # """ # new
-        self.margin = 0.000001
+        self.margin = 0.2
         # triple loss
         self.anchors_coup = tf.nn.relu(self.anchors_coup_)
         self.positives_coup = tf.nn.relu(self.positives_coup_)
         self.negatives_coup = tf.nn.relu(self.negatives_coup_)
-
 
         self.t_pos = tf.reduce_sum(tf.square(self.anchors_coup - self.positives_coup), 1)
         self.t_neg = tf.reduce_sum(tf.square(self.anchors_coup - self.negatives_coup), 1)
@@ -502,9 +506,9 @@ class Car:
                 avg_cost = 0.
                 avg_attr_acc = 0.
                 total_batch = int(num_examples / minibatch/3 / 2.0)
-                # total_batch = 3
+                total_batch = 100
 
-                rate = 0.02 * math.pow(0.7, int(epoch/12.0))
+                rate = 0.02 * math.pow(0.7, int(epoch/10.0))
                 print("learning rate: ", rate)
 
                 # Loop over all batches
@@ -557,8 +561,11 @@ class Car:
 
 
 
+                id_segs_val = id_segs
+                id_images_val = id_images
+
                 # validate
-                if epoch%1==0 and epoch>0:
+                if epoch%1==0:
                     # saver_path = saver.save(sess, "save/save" + epoch + "/model.ckpt")
                     # saver_path = saver.save(sess, "save/save" + epoch + "/model.ckpt")
                     # print("Model saved in file:", saver_path)
@@ -567,8 +574,13 @@ class Car:
                     embedding_testx = []
                     embedding_testy = []
 
+                    k = 0
                     for i in range(id_images.shape[0]):
                     # for i in range(100):
+                        if i > self.lowid:
+                            print("============================== k: ", k)
+                            break
+                        k += 1
                         if i%100==0:
                             print("train embedding: ", i)
                         for j in range(id_images[i].shape[0]):
@@ -585,6 +597,8 @@ class Car:
 
                     for i in range(id_images_val.shape[0]):
                     # for i in range(100):
+                        if i > self.lowid:
+                            break
                         for j in range(id_images_val[i].shape[0]):
                             batch_xs_ = np.array([id_images_val[i][j]])
                             batch_ys_ = np.array([0 for k in range(250)])
@@ -649,7 +663,7 @@ class Car:
 
     def precision(self, trainX, trainY, testX, testY):
         # calculate the precision on the val test.
-        topk = 20    # test the top 5.
+        topk = 10    # test the top 5.
         tot = 0.0
         for i in range(len(testX)):
             if i%1000==0:
@@ -663,6 +677,7 @@ class Car:
                 b = np.array(train)
                 sim.append(np.sum((a-b)*(a-b)))
                 # sim.append(np.sum(np.array(test)*np.array(train)))
+            print("max(sim[....]): ", max(sim))
             for j in range(topk):
                 minc = min(sim)
                 flag = sim.index(minc)
@@ -670,12 +685,17 @@ class Car:
                 sim[flag] = 1e8
 
             cnt = 0
+            sos = 0
+            print("testX[i]: ",testX[i])
             for j in range(topk):
                 if ans[j]==testY[i]:
                     cnt+=1
+                    sos += 1
+                    if sos <= 10:
+                        print("sos:", sos, " ans[j]", ans[j], " testY[i]:", testY[i])
             tot += cnt
         pre = tot/len(testX)/topk
-        print("top 5, precision: ", pre, "  cnt:",tot)
+        print("top 30, precision: ", pre, "  cnt:",tot)
         return pre
 
     def process_answer(self, testX_all, trainX, testX):
@@ -683,7 +703,7 @@ class Car:
         tot = 0.0
         finals = []
         for i in range(len(testX)):
-            if i % 100 == 0:
+            if i % 1000 == 0:
                 print("test number: ", i)
             test = testX[i]
             ans = []
