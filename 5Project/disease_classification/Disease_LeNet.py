@@ -170,28 +170,6 @@ class Disease:
         batch_ys = trainY[locations]
         return np.array(batch_xs), np.array(batch_ys)
 
-    def my_image_filter(self, x_image):
-        self.h_conv1 = tf.nn.relu(self.conv2d(x_image, self.W_conv1) + self.b_conv1)
-        self.h_pool1 = self.max_pool_2x2(self.h_conv1)  # 350*350*32
-        self.h_conv2 = tf.nn.relu(self.conv2d(self.h_pool1, self.W_conv2) + self.b_conv2)
-        self.h_pool2 = self.max_pool_5x5(self.h_conv2)  # 70*70*32
-        self.h_conv3 = tf.nn.relu(self.conv2d(self.h_pool2, self.W_conv3) + self.b_conv3)
-
-        # attribute
-        self.h_conv4 = tf.nn.relu(self.conv2d(self.h_conv3, self.W_conv4_attr) + self.b_conv4_attr)
-        self.h_pool4 = self.max_pool_2x2(self.h_conv4)  # 35*35*64
-        self.h_conv5 = tf.nn.relu(self.conv2d(self.h_pool4, self.W_conv5_attr) + self.b_conv5_attr)
-        self.h_pool5 = self.max_pool_5x5(self.h_conv5)  # 7*7
-        self.h_flat1 = tf.reshape(self.h_pool5, [-1, 7 * 7 * 8])
-
-        self.h_flat1_drop = tf.nn.dropout(self.h_flat1, self.keep_prob)
-        self.h_fc1 = tf.matmul(self.h_flat1_drop, self.W_fc1_attr) + self.b_fc1_attr
-
-        self.h_fc_drop = tf.nn.dropout(self.h_fc1, self.keep_prob)
-        self.y_conv = tf.matmul(self.h_fc_drop, self.W_fc2) + self.b_fc2
-
-        return self.y_conv
-
 
     def model(self, train_file, log_path):
         trainX, trainY, testX, testY = self.read_data_disease(train_file)
@@ -204,35 +182,46 @@ class Disease:
         print("minimal precision: ", float(cnt) / testY.shape[0])
         testX,testY = self.next_batch(testX, testY, testX.shape[0], testY.shape[0])
 
+        # 构建网络
+        self.x_ = tf.placeholder(tf.float32, [None, 490000 * 3])
+        self.y_ = tf.placeholder(tf.float32, [None, 3])
+        x_image = tf.reshape(self.x_, [-1, 700, 700, 3])  # 把向量重新整理成矩阵，最后一个表示通道个数
+
+        # 第一二参数值得卷积核尺寸大小，即patch，第三个参数是图像通道数，第四个参数是卷积核的数目，代表会出现多少个卷积特征
+        W_conv1 = self.weight_variable([3, 3, 3, 8])
+        b_conv1 = self.bias_variable([8])
+        h_conv1 = tf.nn.relu(self.conv2d(x_image, W_conv1) + b_conv1)
+        h_pool1 = self.max_pool_2x2(h_conv1)  # 350*350
+
+        W_conv2 = self.weight_variable([3, 3, 8, 16])  # 多通道卷积，卷积出64个特征
+        b_conv2 = self.bias_variable([16])
+        h_conv2 = tf.nn.relu(self.conv2d(h_pool1, W_conv2) + b_conv2)
+        h_pool2 = self.max_pool_5x5(h_conv2)  # 70*70
+
+        W_conv3 = self.weight_variable([3, 3, 16, 32])  # 多通道卷积，卷积出64个特征
+        b_conv3 = self.bias_variable([32])
+        h_conv3 = tf.nn.relu(self.conv2d(h_pool2, W_conv3) + b_conv3)
+        h_pool3 = self.max_pool_5x5(h_conv3)  # 14*14
+
+        W_conv4 = self.weight_variable([3, 3, 32, 16])  # 多通道卷积，卷积出64个特征
+        b_conv4 = self.bias_variable([16])
+        h_conv4 = tf.nn.relu(self.conv2d(h_pool3, W_conv4) + b_conv4)
+        h_pool4 = self.max_pool_2x2(h_conv4)  # 7*7
+
+        W_fc1 = self.weight_variable([7 * 7 * 16, 16])
+        b_fc1 = self.bias_variable([16])
+        h_pool2_flat = tf.reshape(h_pool4, [-1, 7*7*16])
+        h_fc1 = tf.nn.relu(tf.matmul(h_pool2_flat, W_fc1) + b_fc1)
 
         self.keep_prob = tf.placeholder(tf.float32)
-        self.x_ = tf.placeholder(tf.float32, [None, 700 * 700 * 3])  # shape [None, 128]
-        self.x = tf.reshape(self.x_, [-1, 700, 700, 3])
+        h_fc1_drop = tf.nn.dropout(h_fc1, self.keep_prob)
 
-        self.W_conv1 = self.weight_variable([5, 5, 3, 32])
-        self.b_conv1 = self.bias_variable([32])
-        self.W_conv2 = self.weight_variable([3, 3, 32, 32])
-        self.b_conv2 = self.bias_variable([32])
-        self.W_conv3 = self.weight_variable([5, 5, 32, 32])
-        self.b_conv3 = self.bias_variable([32])
+        W_fc2 = self.weight_variable([16, 3])
+        b_fc2 = self.bias_variable([3])
+        self.y_conv = tf.nn.softmax(tf.matmul(h_fc1_drop, W_fc2) + b_fc2)
 
-        # attr
-        self.W_conv4_attr = self.weight_variable([3, 3, 32, 16])
-        self.b_conv4_attr = self.bias_variable([16])
-        self.W_conv5_attr = self.weight_variable([3, 3, 16, 8])
-        self.b_conv5_attr = self.bias_variable([8])
-        self.W_fc1_attr = self.weight_variable([7 * 7 * 8, 36])  # 288 * 36
-        self.b_fc1_attr = self.bias_variable([36])
-
-        self.W_fc2 = self.weight_variable([36, 3])
-        self.b_fc2 = self.bias_variable([3])
-
-
-        self.y_ = tf.placeholder(tf.float32, [None, 3])     # shape [None, 250]
-        self.y_conv = tf.nn.softmax(self.my_image_filter(self.x))
-
-        self.cross_entropy = tf.reduce_mean(-tf.reduce_sum(self.y_ * tf.log(self.y_conv + 1e-10), reduction_indices=[1]))
-        # self.cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=self.y_conv, labels=self.y_))
+        # cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=y_conv, labels=y_))   #2/3/4/5
+        self.cross_entropy = tf.reduce_mean(-tf.reduce_sum(self.y_ * tf.log(self.y_conv + 1e-10), reduction_indices=[1]))  # 1
         tf.summary.scalar("cross_entropy", self.cross_entropy)
 
 
@@ -257,7 +246,7 @@ class Disease:
             log_path = log_path + str(d)
             print("log_path: ", log_path, "  drop:", drop)
 
-            gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.8)
+            gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.5)
             sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options))
 
             # sess = tf.Session()
@@ -275,7 +264,7 @@ class Disease:
                 total_batch = int(num_examples / minibatch)
                 # total_batch = 1
 
-                rate = 0.00001 * math.pow(0.7, int(epoch/10))
+                rate = 0.001 * math.pow(0.7, int(epoch/10))
                 print("learning rate: ", rate)
 
                 for i in range(total_batch):
@@ -292,13 +281,14 @@ class Disease:
                         print("i/tot: ", i, "/", total_batch, "   current c:", c, "   ave_cost:", avg_cost)
 
                     # # test
-                    batch_xs, batch_ys = self.next_batch_train(testX, testY, minibatch, len(testX))
-                    pre, summary = sess.run([self.accuracy, self.merged_summary_op],
-                                            feed_dict={self.x_: batch_xs, self.y_: batch_ys, self.learning_rate: rate,
-                                                       self.keep_prob: drop})
-                    summary_writer_test.add_summary(summary, epoch * total_batch + i)
-                    if pre > maxc:
-                        maxc = pre
+                    if i%5==0:
+                        batch_xs, batch_ys = self.next_batch_train(testX, testY, minibatch, len(testX))
+                        pre, summary = sess.run([self.accuracy, self.merged_summary_op],
+                                                feed_dict={self.x_: batch_xs, self.y_: batch_ys, self.learning_rate: rate,
+                                                           self.keep_prob: drop})
+                        summary_writer_test.add_summary(summary, int((epoch * total_batch + i)/5))
+                        if pre > maxc:
+                            maxc = pre
 
                 # test
                 # if epoch % 1 == 0:
@@ -316,7 +306,7 @@ class Disease:
 if __name__ =="__main__":
     # CNN_LeNet_5_dev("./cifar_data/train.mat", "./cifar_data/test.mat", "./CNN/cifar")
     disease = Disease()
-    disease.model("./data/label.xlsx", "./log_1_")
+    disease.model("./data/label.xlsx", "./log_LeNet1_")
 
 
 
